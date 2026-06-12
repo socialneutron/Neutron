@@ -1,0 +1,369 @@
+.graph-creator {
+  margin: 30px auto;
+  padding: 24px;
+  width: 100%;
+  max-width: 540px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.graph-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 12px;
+}
+
+.graph-header-row h3 {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.chart-type-selector {
+  display: flex;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.type-btn-sm {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.type-btn-sm:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.type-btn-sm.active {
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  box-shadow: 0 4px 10px rgba(0, 210, 255, 0.3);
+}
+
+.axis-labels-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.input-group-sm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.input-group-sm label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.glass-input-sm {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  color: var(--text-primary);
+  padding: 10px 12px;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.glass-input-sm:focus {
+  border-color: var(--accent-blue);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 8px rgba(0, 210, 255, 0.2);
+}
+
+/* SVG Viewport */
+.chart-viewport {
+  width: 100%;
+  height: 280px;
+  background: rgba(5, 5, 8, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.chart-empty-state p {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.chart-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.chart-axis-text {
+  font-size: 10px;
+  fill: var(--text-secondary);
+  font-weight: 500;
+}
+
+.chart-title-text {
+  font-size: 11px;
+  fill: var(--text-primary);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+/* Chart Drawing Animations */
+.chart-rect {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.chart-rect:hover {
+  fill: var(--accent-blue);
+  filter: drop-shadow(0 0 8px var(--accent-glow));
+}
+
+.chart-line-path {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: drawLine 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.chart-area-path {
+  opacity: 0;
+  animation: fadeIn 1.2s ease forwards 0.3s;
+}
+
+@keyframes drawLine {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+.chart-dot {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.chart-dot-group:hover .chart-dot {
+  r: 7;
+  fill: #ffffff;
+  stroke: var(--accent-blue);
+  filter: drop-shadow(0 0 10px var(--accent-glow));
+}
+
+/* Tooltips */
+.chart-tooltip-text {
+  font-size: 10px;
+  font-weight: 700;
+  fill: #ffffff;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: all 0.25s ease;
+  pointer-events: none;
+}
+
+.chart-bar-group:hover .chart-tooltip-text,
+.chart-dot-group:hover .chart-tooltip-text {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Data Workspace manager */
+.data-workspace {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.workspace-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-primary);
+}
+
+.points-list-scroll {
+  max-height: 160px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.data-row-item, .add-point-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.row-input {
+  flex: 2;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #ffffff;
+  padding: 8px 12px;
+  font-size: 12px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.row-input.qty {
+  flex: 1;
+  text-align: right;
+}
+
+.row-input:focus {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.row-input.add {
+  border-color: rgba(0, 210, 255, 0.3);
+  background: rgba(0, 210, 255, 0.02);
+}
+
+.row-input.add:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 6px rgba(0, 210, 255, 0.15);
+}
+
+/* Delete / Add buttons in rows */
+.row-delete-btn {
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.15);
+  color: #ff6b6b;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.row-delete-btn:hover {
+  background: #ff6b6b;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(255, 107, 107, 0.4);
+}
+
+.row-add-btn {
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  border: none;
+  color: #ffffff;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 10px rgba(138, 43, 226, 0.2);
+}
+
+.row-add-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 4px 14px rgba(0, 210, 255, 0.4);
+}
+
+.row-add-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Workspace actions footer */
+.workspace-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 10px;
+}
+
+.btn-action-outline {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-action-outline:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn-action-outline.danger:hover {
+  background: rgba(255, 107, 107, 0.08);
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.2);
+}

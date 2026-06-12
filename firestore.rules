@@ -1,0 +1,88 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ───────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    // ── Users collection ───────────────────────────────────────────
+    // Anyone signed in can read profiles.
+    // Only the owner can write their own profile.
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isSignedIn() && isOwner(userId);
+      allow delete: if false; // profiles are never deleted
+    }
+
+    // ── Posts collection ───────────────────────────────────────────
+    // Anyone signed in can read posts.
+    // Only the author can update/delete their own post.
+    match /posts/{postId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        resource.data.authorUid == request.auth.uid ||
+        // allow like/comment counter increments by anyone signed in
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['likes', 'comments', 'reposts'])
+      );
+      allow delete: if isSignedIn() && resource.data.authorUid == request.auth.uid;
+
+      // Comments sub-collection
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if isSignedIn() && resource.data.authorUid == request.auth.uid;
+      }
+    }
+
+    // ── Conversations collection ───────────────────────────────────
+    // A conversation document stores metadata (participants, lastMsg, etc.)
+    // Only participants can read/write the conversation.
+    match /conversations/{convId} {
+      allow read, write: if isSignedIn() &&
+        request.auth.uid in resource.data.participants;
+
+      allow create: if isSignedIn() &&
+        request.auth.uid in request.resource.data.participants;
+
+      // Messages sub-collection — only participants can read/write
+      match /messages/{msgId} {
+        allow read: if isSignedIn() &&
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
+
+        allow create: if isSignedIn() &&
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants &&
+          request.resource.data.senderUid == request.auth.uid;
+
+        allow update: if isSignedIn() &&
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants &&
+          // Only allow adding/changing reactions, not the encrypted message body
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'readBy']);
+
+        allow delete: if false; // messages are never hard-deleted (soft-delete via field)
+      }
+    }
+
+    // ── Notifications collection ───────────────────────────────────
+    match /notifications/{notifId} {
+      allow read, update: if isSignedIn() && resource.data.recipientUid == request.auth.uid;
+      allow create: if isSignedIn();
+      allow delete: if false;
+    }
+
+    // ── Topics / Trending tags ─────────────────────────────────────
+    match /topics/{topicId} {
+      allow read: if isSignedIn();
+      allow write: if false; // written by backend/admin only
+    }
+  }
+}

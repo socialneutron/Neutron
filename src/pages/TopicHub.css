@@ -1,0 +1,271 @@
+.topic-hub {
+  min-height: 100vh;
+  background: #050508;
+  padding-bottom: 90px;
+}
+
+/* Header */
+.hub-header {
+  padding: 56px 20px 0;
+  background: linear-gradient(180deg, rgba(5,5,8,1) 0%, rgba(5,5,8,0) 100%);
+  position: relative;
+}
+.hub-back-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-primary);
+  cursor: pointer;
+  margin-bottom: 20px;
+  transition: all 0.2s ease;
+}
+.hub-back-btn:hover { background: rgba(255,255,255,0.1); }
+
+.hub-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.hub-icon-ring {
+  width: 64px; height: 64px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.hub-title {
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  margin-bottom: 6px;
+}
+.hub-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Stats row */
+.hub-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+}
+.hub-stat { display: flex; flex-direction: column; gap: 2px; }
+.hub-stat-val { font-size: 16px; font-weight: 800; }
+.hub-stat-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+.hub-stat-divider { width: 1px; height: 32px; background: var(--glass-border); }
+.hub-join-btn {
+  margin-left: auto;
+  padding: 9px 18px;
+  border-radius: 12px;
+  border: none;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.hub-join-btn:hover { transform: translateY(-1px); opacity: 0.9; }
+
+/* Tabs */
+.hub-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--glass-border);
+}
+.hub-tab {
+  flex: 1;
+  padding: 12px 0;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: capitalize;
+}
+.hub-tab-active {
+  color: var(--accent-blue);
+  border-bottom-color: var(--accent-blue);
+}
+
+/* Body */
+.hub-body { padding: 16px 20px; }
+
+/* Pinned */
+.pinned-post {
+  border-radius: 14px;
+  border: 1px solid;
+  padding: 14px;
+  margin-bottom: 20px;
+}
+.pinned-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+.pinned-text {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.pinned-meta {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Section title */
+.hub-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+/* Trending tags */
+.hub-trending-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.hub-tag {
+  padding: 6px 14px;
+  border-radius: 100px;
+  border: 1px solid;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.hub-tag:hover { opacity: 0.8; }
+
+/* Hub Post Card */
+.hub-post-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+  transition: background 0.2s ease;
+}
+.hub-post-card:hover { background: rgba(255,255,255,0.05); }
+.hub-post-author {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.hub-post-avatar {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+.hub-post-content {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  white-space: pre-line;
+}
+.hub-post-actions {
+  display: flex;
+  gap: 4px;
+}
+.action-btn-sm {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.action-btn-sm:hover { background: rgba(255,255,255,0.06); color: var(--text-primary); }
+.action-btn-sm.liked { color: #ff6b8a; }
+
+/* Poll */
+.hub-poll {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 20px;
+}
+.poll-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.poll-title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.poll-option {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,0.03);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 8px;
+  transition: all 0.2s ease;
+  overflow: hidden;
+  text-align: left;
+  gap: 8px;
+}
+.poll-option:hover:not([style*="cursor: default"]) {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.2);
+}
+.poll-bar {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  border-radius: 12px;
+  transition: width 0.6s ease;
+  z-index: 0;
+}
+.poll-label { position: relative; z-index: 1; flex: 1; }
+.poll-pct { position: relative; z-index: 1; font-size: 13px; color: var(--text-secondary); margin-left: auto; }
+.poll-check { position: relative; z-index: 1; font-weight: 800; }
+.poll-total { margin-top: 10px; font-size: 12px; color: var(--text-secondary); text-align: right; }
+.poll-voted { border-color: rgba(0,210,255,0.3) !important; }
