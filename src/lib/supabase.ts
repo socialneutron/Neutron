@@ -82,6 +82,7 @@ type Query = {
   deleteMode: boolean
   updateData: any | null
   upsertData: any | null
+  orClause: string | null
 }
 
 function createQuery(table: string): Query {
@@ -98,6 +99,7 @@ function createQuery(table: string): Query {
     deleteMode: false,
     updateData: null,
     upsertData: null,
+    orClause: null,
   }
 }
 
@@ -232,6 +234,23 @@ function createMockClient(): SupabaseClient {
     }
 
     rows = applyFilters(rows, q.filters)
+    if (q.orClause) {
+      const conditions = q.orClause.split(',')
+      rows = rows.filter(row => {
+        return conditions.some(cond => {
+          const m = cond.match(/^(\w+)\.(\w+)\.(.+)$/)
+          if (!m) return false
+          const [, col, op, rawVal] = m
+          const val = row[col]
+          const target = rawVal.replace(/%/g, '').toLowerCase()
+          switch (op) {
+            case 'ilike': return String(val || '').toLowerCase().includes(target)
+            case 'eq': return String(val) === target
+            default: return false
+          }
+        })
+      })
+    }
     rows = applyOrders(rows, q.orders)
     if (q.rangeTo > 0) rows = rows.slice(q.rangeFrom, q.rangeTo + 1)
     else if (q.limitCount > 0) rows = rows.slice(0, q.limitCount)
@@ -299,7 +318,7 @@ function createMockClient(): SupabaseClient {
       if (prop === 'neq') return (col: string, val: any) => { getOrCreateQuery().filters.push({ col, op: 'neq', value: val }); return chainable }
       if (prop === 'in') return (col: string, vals: any[]) => { getOrCreateQuery().filters.push({ col, op: 'in', value: vals }); return chainable }
       if (prop === 'is') return (col: string, val: any) => { getOrCreateQuery().filters.push({ col, op: 'is', value: val }); return chainable }
-      if (prop === 'or') return () => chainable
+      if (prop === 'or') return (clause: string) => { getOrCreateQuery().orClause = clause; return chainable }
       if (prop === 'order') return (col: string, opts?: { ascending?: boolean }) => { getOrCreateQuery().orders.push({ col, dir: opts?.ascending !== false ? 'asc' : 'desc' }); return chainable }
       if (prop === 'range') return (from: number, to: number) => { const q = getOrCreateQuery(); q.rangeFrom = from; q.rangeTo = to; return chainable }
       if (prop === 'limit') return (n: number) => { getOrCreateQuery().limitCount = n; return chainable }

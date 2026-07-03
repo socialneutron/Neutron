@@ -47,7 +47,7 @@ export default function ProfilePage({ username, profileAuthor, navigate }: Profi
           const following = await followService.isFollowing(user.id, profileData.id)
           setIsFollowing(following)
         }
-        const posts = await userService.getUserPosts(profileData.id)
+        const posts = await userService.getUserPosts(profileData.id, user?.id)
         setUserPosts(posts as any)
       }
     } catch (err) {

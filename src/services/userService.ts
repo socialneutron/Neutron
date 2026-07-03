@@ -40,7 +40,7 @@ export const userService = {
     return data || []
   },
 
-  async getUserPosts(userId: string, page = 0, limit = 20) {
+  async getUserPosts(userId: string, currentUserId?: string, page = 0, limit = 20) {
     const from = page * limit
     const { data, error } = await supabase
       .from('posts')
@@ -49,7 +49,27 @@ export const userService = {
       .order('created_at', { ascending: false })
       .range(from, from + limit - 1)
     if (error) return []
-    return data || []
+
+    if (!currentUserId || !data?.length) return (data || []) as any
+
+    const postIds = data.map(p => p.id)
+    const [likesRes, bookmarksRes, repostsRes] = await Promise.all([
+      supabase.from('likes').select('post_id').eq('user_id', currentUserId).in('post_id', postIds),
+      supabase.from('bookmarks').select('post_id').eq('user_id', currentUserId).in('post_id', postIds),
+      supabase.from('reposts').select('post_id').eq('user_id', currentUserId).in('post_id', postIds),
+    ])
+
+    const likedSet = new Set(likesRes.data?.map(l => l.post_id))
+    const bookmarkedSet = new Set(bookmarksRes.data?.map(b => b.post_id))
+    const repostedSet = new Set(repostsRes.data?.map(r => r.post_id))
+
+    return data.map(p => ({
+      ...p,
+      author: p.author as any,
+      is_liked: likedSet.has(p.id),
+      is_bookmarked: bookmarkedSet.has(p.id),
+      is_reposted: repostedSet.has(p.id),
+    })) as any[]
   },
 
   async getUserStats(userId: string) {

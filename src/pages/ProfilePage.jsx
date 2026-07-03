@@ -67,7 +67,7 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
               const following = await followService.isFollowing(followerId, profileData.id)
               if (!cancelled) setIsFollowing(following)
             }
-            const posts = await userService.getUserPosts(profileData.id)
+            const posts = await userService.getUserPosts(profileData.id, followerId)
             if (!cancelled) setUserPosts(posts || [])
 
             const followers = await followService.getFollowers(profileData.id)
@@ -83,7 +83,7 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
       } else if (supaProfile) {
         setProfile(supaProfile)
         try {
-          const posts = await userService.getUserPosts(supaProfile.id)
+          const posts = await userService.getUserPosts(supaProfile.id, currentUser?.id || currentUser?.uid)
           if (!cancelled) setUserPosts(posts || [])
 
           const followers = await followService.getFollowers(supaProfile.id)
