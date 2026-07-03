@@ -1,56 +1,68 @@
+/* ── PostCard – Neutron Design System ─────────────────────── */
 .post-card {
-  padding: 20px;
-  border-bottom: 1px solid var(--glass-border);
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(0, 207, 255, 0.08);
   cursor: pointer;
-  transition: background 0.2s ease;
-  animation: fadeSlideUp 0.4s ease both;
+  transition: background var(--transition-speed) var(--ease-standard);
+  animation: fadeSlideUp 0.3s ease both;
 }
 .post-card:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(0, 207, 255, 0.03);
 }
 .post-card:active {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(0, 207, 255, 0.05);
 }
 
 @keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Meta top */
+/* ── Meta top ─────────────────────── */
 .post-meta-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 .category-badge {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  padding: 4px 10px;
+  letter-spacing: 0.8px;
+  padding: 3px 10px;
   border-radius: 100px;
   border: 1px solid;
 }
 .post-time {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 
-/* Author */
+/* ── Author ─────────────────────── */
 .post-author-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 4px;
+  margin: -4px -4px 8px -4px;
+  transition: background var(--transition-speed) var(--ease-standard);
+}
+.post-author-row:hover {
+  background: rgba(0, 210, 255, 0.05);
 }
 .author-avatar {
-  width: 38px; height: 38px;
-  border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--border-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
   color: #fff;
   flex-shrink: 0;
 }
@@ -67,29 +79,33 @@
 .author-name {
   font-size: 14px;
   font-weight: 700;
+  color: var(--text-primary);
 }
 .verified-badge {
-  width: 16px; height: 16px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
-  background: var(--accent-blue);
+  background: var(--primary);
   color: #fff;
-  font-size: 9px;
-  display: flex; align-items: center; justify-content: center;
+  font-size: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-weight: 700;
-  box-shadow: 0 0 6px var(--accent-glow);
 }
 .author-handle {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 
-/* Content */
+/* ── Content ─────────────────────── */
 .post-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.45;
-  margin-bottom: 8px;
+  margin-bottom: 7px;
   letter-spacing: -0.2px;
+  color: var(--text-primary);
 }
 .post-body {
   font-size: 14px;
@@ -102,11 +118,11 @@
   overflow: hidden;
 }
 
-/* AI Summary */
+/* ── AI Summary ─────────────────────── */
 .ai-summary-section {
-  background: rgba(0, 210, 255, 0.05);
-  border: 1px solid rgba(0, 210, 255, 0.15);
-  border-radius: 12px;
+  background: rgba(0, 207, 255, 0.04);
+  border: 1px solid rgba(0, 207, 255, 0.12);
+  border-radius: var(--border-radius);
   margin-bottom: 12px;
   overflow: hidden;
 }
@@ -115,18 +131,22 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 14px;
+  padding: 9px 14px;
   background: none;
   border: none;
-  color: var(--accent-blue);
+  color: var(--primary);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   text-align: left;
+  transition: background var(--transition-speed) var(--ease-standard);
+}
+.ai-summary-btn:hover {
+  background: rgba(0, 207, 255, 0.05);
 }
 .ai-summary-content {
   padding: 10px 14px 14px;
-  border-top: 1px solid rgba(0, 210, 255, 0.1);
+  border-top: 1px solid rgba(0, 207, 255, 0.08);
 }
 .ai-summary-content p {
   font-size: 13px;
@@ -134,49 +154,49 @@
   line-height: 1.6;
 }
 
-/* Tags */
+/* ── Tags ─────────────────────── */
 .post-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 .post-tag {
   font-size: 12px;
-  color: var(--accent-blue);
+  color: var(--primary);
   cursor: pointer;
-  opacity: 0.8;
-  transition: opacity 0.2s;
+  opacity: 0.75;
+  transition: opacity var(--transition-speed) var(--ease-standard);
 }
 .post-tag:hover { opacity: 1; }
 
-/* Actions */
+/* ── Actions ─────────────────────── */
 .post-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 .action-btn {
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 7px 10px;
-  border-radius: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
   border: none;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-speed) var(--ease-standard);
 }
 .action-btn:hover {
-  background: rgba(255,255,255,0.06);
-  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
 }
 .action-btn.liked {
-  color: #ff6b8a;
+  color: #f87171;
 }
 .action-btn.bookmarked {
-  color: var(--accent-blue);
+  color: var(--primary);
 }

@@ -1,248 +1,122 @@
 import { useState } from 'react'
-import { ArrowLeft, Image, BarChart2, Link, Hash, X, ChevronDown } from 'lucide-react'
-import { collection, addDoc } from 'firebase/firestore'
-import { db, auth } from '../firebase'
-import './PostCreation.css'
+import { motion } from 'framer-motion'
+import { ArrowLeft, Image, X, Hash } from 'lucide-react'
+import { useSupabaseAuth } from '../context/SupabaseAuthContext'
+import { postService } from '../services'
+import { useFeedStore } from '../stores/feedStore'
 
-const CATEGORIES = ['AI', 'Politics', 'Startups', 'Finance', 'Science', 'Space', 'Technology', 'Economics']
-const POST_TYPES = [
-  { id: 'text', label: 'Discussion', icon: '✍️' },
-  { id: 'image', label: 'Image', icon: '🖼️' },
-  { id: 'poll', label: 'Poll', icon: '📊' },
-  { id: 'link', label: 'Link', icon: '🔗' },
+const C = {
+  bg: '#05050A', card: '#090914', cardBdr: 'rgba(255,255,255,0.06)',
+  cyan: '#00D2FF', text: '#f1f5f9', muted: '#6b7280',
+}
+
+const CATEGORIES = [
+  { name: 'Digital Assets', color: '#00D2FF' },
+  { name: 'Creative Assets', color: '#7928CA' },
+  { name: 'Intellectual Property', color: '#0891b2' },
+  { name: 'Business Marketplace', color: '#d97706' },
+  { name: 'Financial Opportunities', color: '#f59e0b' },
+  { name: 'Real Estate', color: '#059669' },
+  { name: 'Physical Products', color: '#b45309' },
+  { name: 'General', color: '#4b5563' },
 ]
 
 export default function PostCreation({ navigate }) {
-  const [postType, setPostType] = useState('text')
+  const { user } = useSupabaseAuth()
+  const { addPost } = useFeedStore()
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
-  const [category, setCategory] = useState('AI')
-  const [tags, setTags] = useState([])
-  const [tagInput, setTagInput] = useState('')
-  const [linkUrl, setLinkUrl] = useState('')
-  const [pollOptions, setPollOptions] = useState(['', ''])
-  const [showCategoryDrop, setShowCategoryDrop] = useState(false)
+  const [category, setCategory] = useState('General')
+  const [categoryColor, setCategoryColor] = useState('#4b5563')
+  const [tags, setTags] = useState('')
+  const [imageUrl, setImageUrl] = useState('')
   const [posting, setPosting] = useState(false)
-  const [posted, setPosted] = useState(false)
-
-  const addTag = () => {
-    const t = tagInput.replace(/\s+/g, '').replace(/^#/, '')
-    if (t && !tags.includes(t) && tags.length < 5) {
-      setTags([...tags, t])
-      setTagInput('')
-    }
-  }
-
-  const removeTag = (tag) => setTags(tags.filter(t => t !== tag))
-
-  const updatePollOption = (i, val) => {
-    const opts = [...pollOptions]
-    opts[i] = val
-    setPollOptions(opts)
-  }
-
-  const addPollOption = () => {
-    if (pollOptions.length < 4) setPollOptions([...pollOptions, ''])
-  }
+  const [error, setError] = useState('')
 
   const handlePost = async () => {
-    if (!title.trim()) return
+    if (!user || !title.trim()) return
     setPosting(true)
-    try {
-      const user = auth.currentUser
-      await addDoc(collection(db, 'posts'), {
-        title,
-        body,
-        category,
-        tags,
-        postType,
-        linkUrl: postType === 'link' ? linkUrl : '',
-        pollOptions: postType === 'poll' ? pollOptions : [],
-        author: user?.displayName || 'Anonymous',
-        handle: `@${user?.displayName?.toLowerCase()?.replace(/\s/g, '') || 'anonymous'}`,
-        time: new Date().toISOString(),
-        likes: 0,
-        comments: 0,
-        reposts: 0,
-        hasAISummary: false
-      })
-      setPosted(true)
-      setTimeout(() => navigate('home'), 1000)
-    } catch (err) {
-      console.error("Error creating post:", err)
-      alert("Failed to publish post. Please try again.")
-      setPosting(false)
+    setError('')
+    const post = await postService.create(user.id, {
+      title: title.trim(),
+      body: body.trim(),
+      category,
+      category_color: categoryColor,
+      tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+      image_url: imageUrl,
+    })
+    if (post) {
+      const author = {
+        id: user.id,
+        display_name: user.user_metadata?.display_name || user.email?.split('@')[0] || 'User',
+        username: user.user_metadata?.username || user.email?.split('@')[0] || 'user',
+        avatar_url: user.user_metadata?.avatar_url || '',
+        banner_url: '', bio: '', website: '', location: '',
+        is_verified: false, followers_count: 0, following_count: 0,
+        posts_count: 0, created_at: '', updated_at: '',
+      }
+      addPost({ ...post, author, is_liked: false, is_bookmarked: false, is_reposted: false })
+      navigate('home')
+    } else {
+      setError('Failed to create post. Please try again.')
     }
+    setPosting(false)
   }
 
-  const charLimit = 500
-  const remaining = charLimit - body.length
-
   return (
-    <div className="post-creation">
-      {/* Header */}
-      <div className="create-header">
-        <button className="icon-btn" onClick={() => navigate('home')} id="create-back-btn">
-          <ArrowLeft size={20}/>
+    <div style={{ minHeight: '100vh', background: C.bg }}>
+      <div style={{ padding: '16px 18px', borderBottom: `1px solid ${C.cardBdr}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <button onClick={() => navigate('home')} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4 }}>
+          <ArrowLeft size={20} />
         </button>
-        <h2 className="create-title">New Post</h2>
-        <button
-          className="post-btn"
-          onClick={handlePost}
-          disabled={!title.trim() || posting || posted}
-          id="publish-post-btn"
+        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: C.text }}>New Post</h2>
+        <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={handlePost}
+          disabled={!title.trim() || posting}
+          style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: title.trim() ? 'linear-gradient(135deg, #2563eb, #7c3aed)' : 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: title.trim() ? 'pointer' : 'not-allowed', opacity: posting ? 0.5 : 1 }}
         >
-          {posted ? '✓ Posted!' : posting ? <span className="loading-spinner"/> : 'Publish'}
-        </button>
+          {posting ? 'Posting...' : 'Post'}
+        </motion.button>
       </div>
 
-      <div className="create-body">
-        {/* Post type selector */}
-        <div className="type-selector">
-          {POST_TYPES.map(t => (
-            <button
-              key={t.id}
-              className={`type-btn ${postType === t.id ? 'type-active' : ''}`}
-              onClick={() => setPostType(t.id)}
-              id={`type-${t.id}`}
-            >
-              <span>{t.icon}</span>
-              <span>{t.label}</span>
-            </button>
-          ))}
-        </div>
+      <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {error && <p style={{ color: '#ef4444', fontSize: 13, margin: 0 }}>{error}</p>}
 
-        {/* Category picker */}
-        <div className="category-picker">
-          <label className="field-label">Category</label>
-          <button className="category-select-btn" onClick={() => setShowCategoryDrop(!showCategoryDrop)} id="category-select">
-            <span>{category}</span>
-            <ChevronDown size={16}/>
-          </button>
-          {showCategoryDrop && (
-            <div className="category-dropdown">
-              {CATEGORIES.map(c => (
-                <button key={c} className={`category-opt ${category === c ? 'category-opt-active' : ''}`}
-                  onClick={() => { setCategory(c); setShowCategoryDrop(false) }} id={`cat-${c}`}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Title */}
-        <div className="field-group">
-          <label className="field-label">Title <span className="required">*</span></label>
-          <input
-            className="glass-input"
-            placeholder="What's your discussion about?"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            maxLength={120}
-            id="post-title-input"
-          />
-        </div>
-
-        {/* Text body */}
-        {(postType === 'text' || postType === 'link') && (
-          <div className="field-group">
-            <label className="field-label">
-              Body
-              <span style={{ marginLeft: 'auto', color: remaining < 50 ? '#ff6b6b' : 'var(--text-secondary)' }}>
-                {remaining}
-              </span>
-            </label>
-            <textarea
-              className="glass-input post-textarea"
-              placeholder="Share your thoughts, insights, analysis..."
-              value={body}
-              onChange={e => setBody(e.target.value)}
-              maxLength={charLimit}
-              id="post-body-input"
-            />
+        {!user && (
+          <div style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(0,210,255,0.08)', border: '1px solid rgba(0,210,255,0.2)', fontSize: 13, color: C.cyan }}>
+            Sign in to create posts. Go to <span onClick={() => navigate('login')} style={{ textDecoration: 'underline', cursor: 'pointer' }}>Login</span>.
           </div>
         )}
 
-        {/* Link input */}
-        {postType === 'link' && (
-          <div className="field-group">
-            <label className="field-label"><Link size={14}/> URL</label>
-            <input
-              className="glass-input"
-              placeholder="https://..."
-              value={linkUrl}
-              onChange={e => setLinkUrl(e.target.value)}
-              id="post-link-input"
-            />
-          </div>
-        )}
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title"
+          style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.cardBdr}`, borderRadius: 10, padding: '12px 14px', fontSize: 16, fontWeight: 700, color: '#fff', outline: 'none' }} />
 
-        {/* Image upload */}
-        {postType === 'image' && (
-          <div className="image-upload-area" id="image-upload-area">
-            <div className="image-upload-icon"><Image size={32} color="var(--text-secondary)"/></div>
-            <p>Tap to upload an image</p>
-            <span>PNG, JPG, GIF up to 10MB</span>
-            <input type="file" accept="image/*" style={{ display: 'none' }}/>
-          </div>
-        )}
+        <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="What's on your mind?" rows={6}
+          style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.cardBdr}`, borderRadius: 10, padding: '12px 14px', fontSize: 14, color: '#fff', outline: 'none', resize: 'vertical', lineHeight: 1.6 }} />
 
-        {/* Poll options */}
-        {postType === 'poll' && (
-          <div className="field-group">
-            <label className="field-label"><BarChart2 size={14}/> Poll Options</label>
-            {pollOptions.map((opt, i) => (
-              <input
-                key={i}
-                className="glass-input"
-                style={{ marginBottom: '10px' }}
-                placeholder={`Option ${i + 1}`}
-                value={opt}
-                onChange={e => updatePollOption(i, e.target.value)}
-                id={`poll-opt-create-${i}`}
-              />
+        {/* Category */}
+        <div>
+          <label style={{ fontSize: 12, color: C.muted, marginBottom: 6, display: 'block' }}>Category</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {CATEGORIES.map(c => (
+              <button key={c.name} onClick={() => { setCategory(c.name); setCategoryColor(c.color) }}
+                style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${category === c.name ? c.color : C.cardBdr}`, background: category === c.name ? `${c.color}20` : 'transparent', color: category === c.name ? c.color : C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+              >{c.name}</button>
             ))}
-            {pollOptions.length < 4 && (
-              <button className="add-option-btn" onClick={addPollOption} id="add-poll-option-btn">
-                + Add Option
-              </button>
-            )}
           </div>
-        )}
-
-        {/* Tags */}
-        <div className="field-group">
-          <label className="field-label"><Hash size={14}/> Tags (up to 5)</label>
-          <div className="tag-input-row">
-            <input
-              className="glass-input"
-              placeholder="Add a hashtag..."
-              value={tagInput}
-              onChange={e => setTagInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addTag()}
-              id="tag-input"
-            />
-            <button className="add-tag-btn" onClick={addTag} id="add-tag-btn">Add</button>
-          </div>
-          {tags.length > 0 && (
-            <div className="tags-list">
-              {tags.map(tag => (
-                <span key={tag} className="tag-pill">
-                  #{tag}
-                  <button onClick={() => removeTag(tag)} className="remove-tag-btn"><X size={12}/></button>
-                </span>
-              ))}
-            </div>
-          )}
         </div>
+
+        <input value={tags} onChange={e => setTags(e.target.value)} placeholder="Tags (comma separated)"
+          style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.cardBdr}`, borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#fff', outline: 'none' }} />
+
+        <input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="Image URL (optional)"
+          style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.cardBdr}`, borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#fff', outline: 'none' }} />
 
         {/* AI Moderation notice */}
-        <div className="ai-notice">
-          <span className="ai-notice-icon">🤖</span>
+        <div style={{ display: 'flex', gap: 10, padding: '12px 14px', borderRadius: 10, background: 'rgba(0,210,255,0.04)', border: '1px solid rgba(0,210,255,0.1)' }}>
+          <span style={{ fontSize: 16 }}>🤖</span>
           <div>
-            <p className="ai-notice-title">AI Moderation Active</p>
-            <p className="ai-notice-sub">Your post will be checked for misinformation and community guidelines.</p>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.text }}>AI Moderation Active</p>
+            <p style={{ margin: '2px 0 0', fontSize: 11, color: C.muted }}>Your post will be checked for misinformation and community guidelines.</p>
           </div>
         </div>
       </div>

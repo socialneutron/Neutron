@@ -1,11 +1,12 @@
+/* ── HomeFeed – Neutron Design System ─────────────────────── */
 .home-feed {
   min-height: 100vh;
-  background: #050508;
+  background: var(--bg-deep);
   padding-bottom: 90px;
   position: relative;
 }
 
-/* Top bar */
+/* ── Top bar ─────────────────────── */
 .feed-topbar {
   position: sticky;
   top: 0;
@@ -13,93 +14,93 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px 12px;
-  background: rgba(5, 5, 8, 0.85);
+  padding: 14px 20px 12px;
+  background: rgba(7, 17, 36, 0.9);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid rgba(0, 207, 255, 0.08);
 }
 .topbar-left {}
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 .topbar-icon-btn {
   position: relative;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  width: 40px; height: 40px;
+  background: rgba(0, 207, 255, 0.05);
+  border: 1px solid rgba(0, 207, 255, 0.1);
+  border-radius: var(--border-radius);
+  width: 38px; height: 38px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-speed) var(--ease-standard);
 }
 .topbar-icon-btn:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(0, 207, 255, 0.1);
+  color: var(--text-primary);
 }
 .notif-badge {
   position: absolute;
   top: -4px; right: -4px;
-  width: 18px; height: 18px;
+  width: 16px; height: 16px;
   border-radius: 50%;
-  background: var(--accent-blue);
+  background: var(--primary);
   color: #fff;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 8px var(--accent-glow);
 }
 .avatar-btn {
-  width: 38px; height: 38px;
+  width: 36px; height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
   border: none;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
 }
 .avatar-text {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: #fff;
 }
 
-/* Search */
+/* ── Search ─────────────────────── */
 .search-bar-wrap {
   position: relative;
-  margin: 12px 20px;
+  margin: 10px 20px;
 }
 .search-icon {
   position: absolute;
   left: 14px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 .search-input {
   width: 100%;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid var(--glass-border);
-  border-radius: 14px;
-  padding: 12px 14px 12px 40px;
+  background: rgba(0, 207, 255, 0.04);
+  border: 1px solid rgba(0, 207, 255, 0.1);
+  border-radius: var(--border-radius);
+  padding: 11px 14px 11px 40px;
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: 14px;
   outline: none;
-  transition: all 0.3s ease;
+  transition: all var(--transition-speed) var(--ease-standard);
 }
-.search-input::placeholder { color: var(--text-secondary); }
+.search-input::placeholder { color: var(--text-muted); }
 .search-input:focus {
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 12px rgba(0,210,255,0.15);
-  background: rgba(255,255,255,0.07);
+  border-color: rgba(0, 207, 255, 0.3);
+  box-shadow: 0 0 8px rgba(0, 207, 255, 0.1);
+  background: rgba(0, 207, 255, 0.06);
 }
 
-/* Trending */
+/* ── Trending ─────────────────────── */
 .trending-strip {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 0 20px 12px;
   overflow-x: auto;
   scrollbar-width: none;
@@ -109,8 +110,8 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  color: var(--text-secondary);
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: 11px;
   white-space: nowrap;
   font-weight: 600;
   text-transform: uppercase;
@@ -118,37 +119,38 @@
 }
 .trending-tags {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   overflow-x: auto;
   scrollbar-width: none;
 }
 .trending-tag {
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: rgba(0,210,255,0.06);
-  border: 1px solid rgba(0,210,255,0.2);
+  gap: 5px;
+  background: rgba(0, 207, 255, 0.05);
+  border: 1px solid rgba(0, 207, 255, 0.12);
   border-radius: 100px;
   padding: 5px 12px;
   font-size: 12px;
-  color: var(--accent-blue);
+  color: var(--primary);
   white-space: nowrap;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-speed) var(--ease-standard);
 }
 .trending-tag:hover {
-  background: rgba(0,210,255,0.12);
+  background: rgba(0, 207, 255, 0.1);
+  border-color: rgba(0, 207, 255, 0.25);
 }
 .tag-count {
-  color: var(--text-secondary);
+  color: var(--text-muted);
   font-size: 11px;
 }
 
-/* Section Tabs */
+/* ── Section Tabs ─────────────────────── */
 .section-tabs {
   display: flex;
   gap: 6px;
-  padding: 0 20px 16px;
+  padding: 0 20px 14px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -157,76 +159,79 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 7px 14px;
   border-radius: 100px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid rgba(0, 207, 255, 0.1);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-speed) var(--ease-standard);
 }
 .tab-btn:hover {
-  background: rgba(255,255,255,0.05);
-  color: var(--text-primary);
+  background: rgba(0, 207, 255, 0.05);
+  color: var(--text-secondary);
 }
 .tab-active {
-  background: rgba(0,210,255,0.1) !important;
-  border-color: rgba(0,210,255,0.4) !important;
-  color: var(--accent-blue) !important;
-  box-shadow: 0 0 10px rgba(0,210,255,0.1);
+  background: rgba(0, 207, 255, 0.08) !important;
+  border-color: rgba(0, 207, 255, 0.25) !important;
+  color: var(--primary) !important;
 }
 
-/* Posts */
+/* ── Posts ─────────────────────── */
 .posts-list {
   display: flex;
   flex-direction: column;
   gap: 0;
 }
 
-/* FAB */
+/* ── FAB ─────────────────────── */
 .fab {
   position: fixed;
   bottom: 90px;
   right: 20px;
-  width: 56px; height: 56px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  width: 52px; height: 52px;
+  border-radius: var(--border-radius);
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
   border: none;
   color: #fff;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 20px var(--purple-glow);
-  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 207, 255, 0.2);
+  transition: all var(--transition-speed) var(--ease-standard);
   z-index: 200;
 }
 .fab:hover {
-  transform: translateY(-3px) scale(1.05);
-  box-shadow: 0 8px 24px rgba(0,210,255,0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 207, 255, 0.3);
 }
 .fab:active {
   transform: scale(0.95);
 }
 
-/* Search results */
+/* ── Search results ─────────────────────── */
 .clear-search {
   position: absolute;
   right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.08);
   border: none;
   border-radius: 50%;
   width: 20px; height: 20px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   cursor: pointer;
+  transition: background var(--transition-speed) var(--ease-standard);
+}
+.clear-search:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .search-results-header {
-  padding: 0 20px 16px;
+  padding: 0 20px 14px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -237,8 +242,8 @@
 }
 .results-count {
   font-size: 12px;
-  color: var(--text-secondary);
-  background: rgba(255,255,255,0.05);
+  color: var(--text-muted);
+  background: rgba(0, 207, 255, 0.06);
   padding: 4px 10px;
   border-radius: 100px;
 }
@@ -250,14 +255,14 @@
   justify-content: center;
   padding: 80px 40px;
   text-align: center;
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 .empty-icon {
   margin-bottom: 20px;
-  opacity: 0.3;
+  opacity: 0.25;
 }
 .empty-search h3 {
-  color: var(--text-primary);
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 .empty-search p {

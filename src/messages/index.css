@@ -1,0 +1,82 @@
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(5, 8, 22, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(77, 166, 255, 0.2);
+  border-radius: 99px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(77, 166, 255, 0.44);
+}
+
+/* Glassmorphism utility helpers */
+.glass-panel {
+  background: rgba(10, 16, 36, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Custom Neon Glow pulses */
+@keyframes neonPulse {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(77, 166, 255, 0.2), 0 0 10px rgba(77, 166, 255, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 10px rgba(77, 166, 255, 0.6), 0 0 20px rgba(77, 166, 255, 0.3);
+  }
+}
+
+.neon-border-pulse {
+  animation: neonPulse 3s infinite ease-in-out;
+}
+
+/* Typewriter decryption scanline */
+@keyframes cipherScroll {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(1000%); }
+}
+
+.cipher-scanner {
+  animation: cipherScroll 2s infinite linear;
+}
+
+/* New message entrance animation */
+@keyframes msgSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.msg-enter {
+  animation: msgSlideIn 0.25s ease-out forwards;
+}
+
+/* Comment entrance animation */
+@keyframes commentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.comment-enter {
+  animation: commentFadeIn 0.25s ease-out forwards;
+}

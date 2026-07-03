@@ -1,0 +1,60 @@
+
+@layer utilities {
+  .glass-card {
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.4);
+  }
+
+  .glass-card-hover {
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .glass-card-hover:hover {
+    border-color: rgba(37, 99, 235, 0.4);
+    box-shadow: 0 0 20px rgba(37, 99, 235, 0.15);
+    transform: translateY(-1px);
+  }
+
+  .glow-border {
+    box-shadow: inset 0 0 10px rgba(59, 130, 246, 0.15);
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, #ffffff 30%, #93c5fd 70%, #3b82f6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .glow-blue {
+    box-shadow: 0 0 25px rgba(37, 99, 235, 0.25);
+  }
+
+  .space-bg {
+    background: #020617;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Custom ambient star transitions */
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.15;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.02);
+  }
+}
+
+.ambient-pulse {
+  animation: pulseGlow 10s infinite ease-in-out;
+}

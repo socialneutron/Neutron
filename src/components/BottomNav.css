@@ -2,15 +2,31 @@
   position: fixed;
   bottom: 0; left: 0; right: 0;
   height: 72px;
-  background: rgba(5, 5, 8, 0.92);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: rgba(7, 17, 36, 0.95);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border-top: 1px solid var(--glass-border);
+  border-top: 1px solid rgba(0, 207, 255, 0.1);
   display: flex;
   align-items: center;
-  justify-content: space-around;
-  padding: 0 8px;
+  justify-content: center;
+  gap: 0;
   z-index: 1000;
+}
+
+.nav-group {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 280px;
+}
+
+.nav-group-left {
+  justify-content: flex-end;
+}
+
+.nav-group-right {
+  justify-content: flex-start;
 }
 
 .nav-item-btn {
@@ -23,13 +39,14 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text-secondary);
-  padding: 8px 0;
-  transition: color 0.2s ease;
+  color: var(--text-muted);
+  padding: 8px 4px;
+  transition: color var(--transition-speed) var(--ease-standard);
+  min-width: 0;
 }
 .nav-item-btn:hover { color: var(--text-primary); }
 
-.nav-active { color: var(--accent-blue) !important; }
+.nav-active { color: var(--primary) !important; }
 
 .nav-icon-wrap {
   position: relative;
@@ -44,8 +61,8 @@
   transform: translateX(-50%);
   width: 4px; height: 4px;
   border-radius: 50%;
-  background: var(--accent-blue);
-  box-shadow: 0 0 6px var(--accent-blue);
+  background: var(--primary);
+  box-shadow: 0 0 4px rgba(0, 207, 255, 0.4);
 }
 
 .nav-label {
@@ -53,23 +70,28 @@
   font-weight: 600;
   letter-spacing: 0.3px;
   text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .nav-create-btn {
   width: 52px; height: 52px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  border-radius: var(--border-radius);
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
   border: none;
   color: #fff;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 16px var(--purple-glow);
-  transition: all 0.2s ease;
+  box-shadow: 0 4px 10px rgba(0, 207, 255, 0.15);
+  transition: all var(--transition-speed) var(--ease-standard);
   flex-shrink: 0;
+  margin: 0 4px;
 }
 .nav-create-btn:hover {
-  transform: scale(1.08);
-  box-shadow: 0 6px 20px rgba(0,210,255,0.5);
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 207, 255, 0.25);
 }
 .nav-create-btn:active {
   transform: scale(0.95);

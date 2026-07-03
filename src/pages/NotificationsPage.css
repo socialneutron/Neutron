@@ -1,10 +1,11 @@
+/* ── NotificationsPage – Neutron Design System ─────────────────────── */
 .notifications-page {
   min-height: 100vh;
-  background: #050508;
+  background: var(--bg-deep);
   padding-bottom: 90px;
 }
 
-/* Header */
+/* ── Header ─────────────────────── */
 .notif-header {
   display: flex;
   align-items: flex-start;
@@ -12,95 +13,98 @@
   padding: 56px 20px 16px;
 }
 .notif-title {
-  font-size: 24px;
-  font-weight: 900;
-  letter-spacing: -0.5px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
   margin-bottom: 4px;
+  color: var(--text-primary);
 }
 .notif-unread-count {
   display: inline-block;
-  background: rgba(0,210,255,0.12);
-  border: 1px solid rgba(0,210,255,0.3);
+  background: rgba(0, 207, 255, 0.06);
+  border: 1px solid rgba(0, 207, 255, 0.15);
   border-radius: 100px;
   padding: 3px 10px;
   font-size: 12px;
   font-weight: 700;
-  color: var(--accent-blue);
+  color: var(--primary);
 }
 .mark-read-btn {
   background: none;
-  border: 1px solid var(--glass-border);
+  border: 1px solid rgba(0, 207, 255, 0.1);
   border-radius: 100px;
   padding: 8px 14px;
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-speed) var(--ease-standard);
   margin-top: 4px;
 }
 .mark-read-btn:hover {
-  background: rgba(255,255,255,0.05);
+  background: rgba(0, 207, 255, 0.05);
   color: var(--text-primary);
 }
 
-/* Filter Tabs */
+/* ── Filter Tabs ─────────────────────── */
 .notif-tabs {
   display: flex;
   gap: 6px;
-  padding: 0 20px 16px;
+  padding: 0 20px 14px;
   overflow-x: auto;
   scrollbar-width: none;
 }
 .notif-tabs::-webkit-scrollbar { display: none; }
 .notif-tab {
-  padding: 8px 16px;
+  padding: 7px 14px;
   border-radius: 100px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid rgba(0, 207, 255, 0.1);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-speed) var(--ease-standard);
 }
 .notif-tab:hover {
-  background: rgba(255,255,255,0.05);
-  color: var(--text-primary);
+  background: rgba(0, 207, 255, 0.05);
+  color: var(--text-secondary);
 }
 .notif-tab-active {
-  background: rgba(0,210,255,0.1) !important;
-  border-color: rgba(0,210,255,0.4) !important;
-  color: var(--accent-blue) !important;
-  box-shadow: 0 0 10px rgba(0,210,255,0.1);
+  background: rgba(0, 207, 255, 0.08) !important;
+  border-color: rgba(0, 207, 255, 0.25) !important;
+  color: var(--primary) !important;
 }
 
-/* Breaking Banner */
+/* ── Breaking Banner ─────────────────────── */
 .breaking-banner {
   display: flex;
   align-items: center;
   gap: 12px;
   margin: 0 20px 16px;
   padding: 14px 16px;
-  background: rgba(255, 71, 87, 0.08);
-  border: 1px solid rgba(255, 71, 87, 0.25);
-  border-radius: 16px;
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: var(--border-radius);
 }
 .breaking-pulse {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: #ff4757;
-  box-shadow: 0 0 8px #ff4757;
+  background: var(--error);
   flex-shrink: 0;
-  animation: pulse 1.2s ease-in-out infinite;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 .breaking-label {
   display: block;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 1.5px;
-  color: #ff4757;
+  color: var(--error);
   text-transform: uppercase;
   margin-bottom: 3px;
 }
@@ -113,14 +117,14 @@
   margin-left: auto;
   background: none;
   border: none;
-  color: #ff4757;
+  color: var(--error);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
 }
 
-/* Notification List */
+/* ── Notification List ─────────────────────── */
 .notif-list {
   display: flex;
   flex-direction: column;
@@ -129,24 +133,24 @@
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
-  transition: background 0.15s ease;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(0, 207, 255, 0.05);
+  transition: background var(--transition-speed) var(--ease-standard);
   position: relative;
 }
 .notif-item:hover {
-  background: rgba(255,255,255,0.025);
+  background: rgba(0, 207, 255, 0.03);
 }
 .notif-unread {
-  background: rgba(0,210,255,0.025);
+  background: rgba(0, 207, 255, 0.02);
 }
 .notif-unread:hover {
-  background: rgba(0,210,255,0.04);
+  background: rgba(0, 207, 255, 0.04);
 }
 .notif-icon-wrap {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--border-radius);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -161,21 +165,22 @@
   font-size: 14px;
   line-height: 1.5;
   margin-bottom: 4px;
+  color: var(--text-secondary);
 }
 .notif-text em {
   font-style: normal;
   font-weight: 600;
+  color: var(--text-primary);
 }
 .notif-time {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 .unread-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--accent-blue);
-  box-shadow: 0 0 6px var(--accent-glow);
+  background: var(--primary);
   flex-shrink: 0;
   margin-top: 6px;
 }

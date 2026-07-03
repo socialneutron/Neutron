@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Heart, MessageCircle, Repeat2, Bookmark, Share2, Zap } from 'lucide-react'
 import './PostCard.css'
 
-export default function PostCard({ post, navigate, delay = 0 }) {
+export default function PostCard({ post, navigate, delay = 0, onViewAuthor }) {
   const [liked, setLiked] = useState(false)
   const [bookmarked, setBookmarked] = useState(false)
   const [likes, setLikes] = useState(post.likes)
@@ -35,7 +35,7 @@ export default function PostCard({ post, navigate, delay = 0 }) {
       </div>
 
       {/* Author row */}
-      <div className="post-author-row">
+      <div className="post-author-row" onClick={(e) => { e.stopPropagation(); onViewAuthor?.({ name: post.author, handle: post.handle, avatar: post.avatar, verified: post.verified }) }}>
         <div className="author-avatar" style={{ background: `linear-gradient(135deg, ${post.categoryColor}60, #8a2be260)` }}>
           <span>{post.avatar}</span>
         </div>
@@ -53,6 +53,32 @@ export default function PostCard({ post, navigate, delay = 0 }) {
 
       {/* Body */}
       <p className="post-body">{post.body}</p>
+
+      {/* Asset Snippet (from marketplace comment) */}
+      {post.assetSnippet && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '12px',
+          margin: '8px 0 12px', padding: '10px 12px',
+          background: 'rgba(0,207,255,0.05)', borderRadius: '10px',
+          border: '1px solid rgba(0,207,255,0.15)', cursor: 'pointer',
+        }} onClick={(e) => e.stopPropagation()}>
+          <img src={post.assetSnippet.image} alt="" style={{
+            width: '44px', height: '44px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0,
+          }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#fff' }}>{post.assetSnippet.title}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+              <span style={{ fontSize: '11px', color: '#00CFFF', fontWeight: 600 }}>
+                ${(post.assetSnippet.price || 0).toLocaleString()} CRD
+              </span>
+              <span style={{ fontSize: '11px', color: '#6b7280' }}>·</span>
+              <span style={{ fontSize: '11px', color: '#9ca3af' }}>
+                Seller: @{post.assetSnippet.seller || 'Unknown'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI Summary */}
       {post.hasAISummary && (

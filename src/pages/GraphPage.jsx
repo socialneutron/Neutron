@@ -1,1024 +1,352 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ArrowLeft, Plus, Edit3, Save, Trash2, X, Info,
-  Calendar, User, MessageSquare, Heart, Share2, Compass,
-  Settings, Cpu, Eye, LayoutGrid, Zap, Activity, TrendingUp,
-  BarChart2
+  ArrowLeft, Bell, BarChart3, Download, Share2, Repeat2,
+  Heart, MessageCircle, ChevronDown, Info, Maximize2, Eye,
+  Compass, Zap
 } from 'lucide-react'
-import './GraphPage.css'
+import ShareModal from '../components/graphs/ShareModal'
+import GraphDownloadModal from '../components/graphs/GraphDownloadModal'
+import CreatorStudio from '../components/graphs/CreatorStudio'
+import { useGraphStore } from '../stores/graphStore'
+import { useUserAvatar } from '../stores/userAvatarStore'
 
-/* ─────────────────────────────────────────────────────────────────────
-   CONSTANTS
-───────────────────────────────────────────────────────────────────── */
-const NEON = [
-  '#00d2ff', '#ff007f', '#39ff14', '#ff6c00', '#a855f7', '#ffe600'
-]
-
-const CHART_TYPES = [
-  { key: 'bar',    label: 'Bar',    icon: '▬' },
-  { key: 'line',   label: 'Line',   icon: '╱' },
-  { key: 'pie',    label: 'Pie',    icon: '◕' },
-  { key: 'donut',  label: 'Donut',  icon: '◉' },
-  { key: 'radial', label: 'Radial', icon: '◎' },
-]
-
-const INTEL_STREAMS = {
-  1: [
-    { id: 101, author: '@macro_recon', content: 'Gold breakout confirmed above 2,050. Central bank accumulation is at multi-decade highs. Risk-off indices flashing neon.', likes: 184, comments: 29 },
-    { id: 102, author: '@cyber_hedge', content: 'As real yields drop, physical bullion becomes structurally attractive. Multi-year cup-and-handle targeting $2,600.', likes: 92, comments: 11 },
-    { id: 103, author: '@tokyo_quant', content: 'Currency expansion metrics across 8 majors correlate directly with this gold trajectory. Long exposure recommended.', likes: 53, comments: 4 }
-  ],
-  2: [
-    { id: 201, author: '@satoshi_core', content: 'ETF telemetry registers another record session. $350M net positive inflows. Cold storage drains unsustainable.', likes: 1420, comments: 412 },
-    { id: 202, author: '@hash_node_42', content: 'Bitcoin network difficulty at record peak. Post-halving miners expanding with next-gen ASICs. Bull cycle structural.', likes: 890, comments: 167 },
-    { id: 203, author: '@on_chain_lens', content: 'Long-term holders not budging. SOPR stable — zero panic or early profit-taking. Realization phase warming up.', likes: 742, comments: 92 }
-  ],
-  3: [
-    { id: 301, author: '@silicon_vector', content: 'AI margins showing structural bifurcation. NVIDIA capturing 85% of value; software wrappers facing price fatigue.', likes: 450, comments: 95 },
-    { id: 302, author: '@alpha_decay', content: 'Technically overextended but cash generation keeps multi-caps afloat. Consolidation to 14,800 is overdue.', likes: 284, comments: 34 },
-  ],
-  4: [
-    { id: 401, author: '@crude_sentinel', content: 'Crude tightening in global ports. Mid-East cuts compressing physical spot premiums. Brent targeting $92.', likes: 230, comments: 41 },
-    { id: 402, author: '@solar_transition', content: 'Europe drawing reserves fast, but solar infrastructure already offset 12% of baseline grid energy requirements.', likes: 167, comments: 38 }
-  ]
+const C = {
+  bg: '#05050A', surface: '#090914', card: '#0d0d1a', cardHover: '#111127',
+  border: 'rgba(255,255,255,0.06)', borderLight: 'rgba(255,255,255,0.1)',
+  cyan: '#00D2FF', purple: '#7928CA', green: '#34D399', red: '#ef4444',
+  text: '#f1f5f9', muted: '#6b7280', dim: '#374151',
 }
 
-/* ─────────────────────────────────────────────────────────────────────
-   SVG CHART ENGINE
-───────────────────────────────────────────────────────────────────── */
-function NeonChart({ dataPoints = [], chartType = 'bar', size = 'normal', animKey = 0, animEnabled = true }) {
-  const [hovered, setHovered] = useState(null)
-  const [ready, setReady] = useState(false)
+const MARKET_DATA = [
+  { symbol: 'BTC', name: 'Bitcoin', price: '$66,982.41', change: '+2.35%', positive: true, icon: '₿', color: '#f7931a' },
+  { symbol: 'ETH', name: 'Ethereum', price: '$3,512.84', change: '+1.87%', positive: true, icon: 'Ξ', color: '#627eea' },
+  { symbol: 'SOL', name: 'Solana', price: '$164.72', change: '+4.25%', positive: true, icon: '◎', color: '#00D2FF' },
+  { symbol: 'NTRN', name: 'Neutron', price: '$1.29', change: '+6.14%', positive: true, icon: '⚛', color: '#7928CA' },
+]
 
-  useEffect(() => {
-    setReady(false)
-    const t = setTimeout(() => setReady(true), 60)
-    return () => clearTimeout(t)
-  }, [animKey, chartType])
+const CREATORS = [
+  { name: 'Aria Takahashi', handle: '@aria_t', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80', verified: true },
+  { name: 'Devin Vance', handle: '@vance_quant', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80', verified: true },
+  { name: 'Lina Vance', handle: '@lina_data', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=150&q=80', verified: true },
+]
 
-  const W = 480
-  const H = size === 'large' ? 340 : 260
-  const PAD = { top: 20, right: 30, bottom: 40, left: 44 }
-  const innerW = W - PAD.left - PAD.right
-  const innerH = H - PAD.top - PAD.bottom
+const INSIGHTS = [
+  { creator: CREATORS[0], title: 'Web3 Gas Fees Are Stabilizing — What\'s Next?', time: '9m ago', miniType: 'bar' },
+  { creator: CREATORS[1], title: 'Solana On-Chain Metrics Show Strong Holder Confluence', time: '21m ago', miniType: 'line' },
+  { creator: CREATORS[2], title: 'RNA Folding Models Unlocking New Genomic Frontiers', time: '35m ago', miniType: 'area' },
+]
 
-  const data = useMemo(() =>
-    dataPoints.map(p => ({
-      x: String(p.x),
-      y: Math.max(0, parseFloat(p.y) || 0)
-    }))
-  , [dataPoints])
+const SIDEBAR_NAV = [
+  { id: 'explorer', label: 'Explorer', icon: Compass },
+  { id: 'graphs', label: 'Graphs', icon: BarChart3, active: true },
+  { id: 'ai', label: 'AI Insights', icon: Zap, badge: 'BETA' },
+]
 
-  const maxY = useMemo(() => Math.max(...data.map(d => d.y), 1), [data])
-  const totalY = useMemo(() => data.reduce((s, d) => s + d.y, 0), [data])
-  const cx = W / 2, cy = H / 2
-
-  if (!data.length) {
+function MiniChart({ type, colors, height = 40 }) {
+  const w = 120
+  if (type === 'bar') {
+    const bars = [0.4, 0.7, 0.3, 0.9, 0.5, 0.8, 0.6, 0.4, 0.7, 0.3, 0.85, 0.55]
     return (
-      <div className="nc-empty">
-        <Cpu size={32} color="#00d2ff" opacity={0.3} />
-        <p>NO DATA LOADED</p>
-      </div>
-    )
-  }
-
-  /* ── BAR CHART ── */
-  if (chartType === 'bar') {
-    const slotW = innerW / data.length
-    const barW  = Math.max(10, slotW * 0.55)
-    const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => ({
-      val: Math.round(maxY * f),
-      y: PAD.top + innerH - f * innerH
-    }))
-
-    return (
-      <svg viewBox={`0 0 ${W} ${H}`} className="nc-svg">
-        <defs>
-          {data.map((d, i) => (
-            <linearGradient key={i} id={`bar-grad-${animKey}-${i}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={NEON[i % NEON.length]} stopOpacity="0.9" />
-              <stop offset="100%" stopColor={NEON[i % NEON.length]} stopOpacity="0.15" />
-            </linearGradient>
-          ))}
-        </defs>
-
-        {/* Grid lines */}
-        {yTicks.map((t, i) => (
-          <g key={i}>
-            <line x1={PAD.left} y1={t.y} x2={PAD.left + innerW} y2={t.y}
-              stroke="rgba(255,255,255,0.06)" strokeWidth="1" strokeDasharray="4 4" />
-            <text x={PAD.left - 6} y={t.y + 4} textAnchor="end"
-              fill="rgba(255,255,255,0.35)" fontSize="9px" fontFamily="monospace">{t.val}</text>
-          </g>
+      <svg width={w} height={height} viewBox={`0 0 ${w} ${height}`}>
+        {bars.map((h, i) => (
+          <rect key={i} x={i * 10} y={height - h * height} width={7} height={h * height} rx={2} fill={i % 2 === 0 ? colors[0] : colors[1]} opacity={0.9} />
         ))}
-
-        {/* Axes */}
-        <line x1={PAD.left} y1={PAD.top} x2={PAD.left} y2={PAD.top + innerH}
-          stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-        <line x1={PAD.left} y1={PAD.top + innerH} x2={PAD.left + innerW} y2={PAD.top + innerH}
-          stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-
-        {/* Bars */}
-        {data.map((d, i) => {
-          const barH    = (d.y / maxY) * innerH
-          const bx      = PAD.left + i * slotW + (slotW - barW) / 2
-          const by      = PAD.top + innerH - barH
-          const color   = NEON[i % NEON.length]
-          const isH     = hovered === i
-
-          return (
-            <g key={i}
-              onMouseEnter={() => setHovered(i)}
-              onMouseLeave={() => setHovered(null)}
-              style={{ cursor: 'pointer' }}
-            >
-              {/* Bar shadow */}
-              {isH && <rect x={bx - 2} y={by - 2} width={barW + 4} height={barH + 4}
-                rx="4" fill={color} opacity="0.1" />}
-
-              {/* Bar body */}
-              {animEnabled ? (
-                <motion.rect
-                  x={bx} y={ready ? by : PAD.top + innerH}
-                  width={barW} height={ready ? barH : 0}
-                  rx="4"
-                  fill={`url(#bar-grad-${animKey}-${i})`}
-                  stroke={color}
-                  strokeWidth={isH ? 1.5 : 0.8}
-                  style={{ filter: isH ? `drop-shadow(0 0 8px ${color})` : 'none' }}
-                  initial={{ height: 0, y: PAD.top + innerH }}
-                  animate={{ height: barH, y: by }}
-                  transition={{ duration: 0.7, delay: i * 0.08, ease: 'easeOut' }}
-                />
-              ) : (
-                <rect
-                  x={bx} y={by}
-                  width={barW} height={barH}
-                  rx="4"
-                  fill={`url(#bar-grad-${animKey}-${i})`}
-                  stroke={color}
-                  strokeWidth={isH ? 1.5 : 0.8}
-                  style={{ filter: isH ? `drop-shadow(0 0 8px ${color})` : 'none' }}
-                />
-              )}
-
-              {/* Value label on hover */}
-              {isH && (
-                <text x={bx + barW / 2} y={by - 6} textAnchor="middle"
-                  fill={color} fontSize="10px" fontWeight="700" fontFamily="monospace"
-                  style={{ filter: `drop-shadow(0 0 4px ${color})` }}
-                >{d.y}</text>
-              )}
-
-              {/* X axis label */}
-              <text x={bx + barW / 2} y={PAD.top + innerH + 14} textAnchor="middle"
-                fill={isH ? color : 'rgba(255,255,255,0.45)'} fontSize="9px" fontFamily="monospace"
-              >{d.x}</text>
-            </g>
-          )
-        })}
       </svg>
     )
   }
-
-  /* ── LINE CHART ── */
-  if (chartType === 'line') {
-    const slotW = innerW / (data.length - 1 || 1)
-    const pts   = data.map((d, i) => ({
-      x: PAD.left + i * slotW,
-      y: PAD.top + innerH - (d.y / maxY) * innerH,
-      ...d
-    }))
-
-    const pathD = `M ${pts.map(p => `${p.x} ${p.y}`).join(' L ')}`
-    const fillPath = `M${pts[0].x},${PAD.top + innerH} ` +
-      pts.map(p => `L${p.x},${p.y}`).join(' ') +
-      ` L${pts[pts.length - 1].x},${PAD.top + innerH} Z`
-
-    const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => ({
-      val: Math.round(maxY * f),
-      y: PAD.top + innerH - f * innerH
-    }))
-
+  if (type === 'line') {
     return (
-      <svg viewBox={`0 0 ${W} ${H}`} className="nc-svg">
-        <defs>
-          <linearGradient id={`line-fill-${animKey}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#00d2ff" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#00d2ff" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-
-        {/* Grid */}
-        {yTicks.map((t, i) => (
-          <g key={i}>
-            <line x1={PAD.left} y1={t.y} x2={PAD.left + innerW} y2={t.y}
-              stroke="rgba(255,255,255,0.06)" strokeWidth="1" strokeDasharray="4 4" />
-            <text x={PAD.left - 6} y={t.y + 4} textAnchor="end"
-              fill="rgba(255,255,255,0.35)" fontSize="9px" fontFamily="monospace">{t.val}</text>
-          </g>
-        ))}
-
-        {/* Axes */}
-        <line x1={PAD.left} y1={PAD.top} x2={PAD.left} y2={PAD.top + innerH}
-          stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-        <line x1={PAD.left} y1={PAD.top + innerH} x2={PAD.left + innerW} y2={PAD.top + innerH}
-          stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-
-        {/* Area fill */}
-        {animEnabled ? (
-          <motion.path
-            d={fillPath} fill={`url(#line-fill-${animKey})`}
-            initial={{ opacity: 0 }} animate={{ opacity: ready ? 1 : 0 }}
-            transition={{ duration: 1.2 }}
-          />
-        ) : (
-          <path d={fillPath} fill={`url(#line-fill-${animKey})`} />
-        )}
-
-        {/* Line */}
-        {animEnabled ? (
-          <motion.path
-            d={pathD} fill="none"
-            stroke="#00d2ff" strokeWidth="2"
-            strokeLinecap="round" strokeLinejoin="round"
-            style={{ filter: 'drop-shadow(0 0 6px #00d2ff)' }}
-            initial={{ pathLength: 0 }} animate={{ pathLength: ready ? 1 : 0 }}
-            transition={{ duration: 1.2, ease: 'easeInOut' }}
-          />
-        ) : (
-          <path
-            d={pathD} fill="none"
-            stroke="#00d2ff" strokeWidth="2"
-            strokeLinecap="round" strokeLinejoin="round"
-            style={{ filter: 'drop-shadow(0 0 6px #00d2ff)' }}
-          />
-        )}
-
-        {/* Dots */}
-        {pts.map((p, i) => {
-          const isH = hovered === i
-          return (
-            <g key={i}
-              onMouseEnter={() => setHovered(i)}
-              onMouseLeave={() => setHovered(null)}
-              style={{ cursor: 'pointer' }}
-            >
-              <circle cx={p.x} cy={p.y} r={isH ? 7 : 4}
-                fill={isH ? '#00d2ff' : '#050510'} stroke="#00d2ff" strokeWidth="2"
-                style={{ filter: isH ? 'drop-shadow(0 0 8px #00d2ff)' : 'none', transition: 'all 0.2s' }}
-              />
-              {isH && (
-                <text x={p.x} y={p.y - 12} textAnchor="middle"
-                  fill="#00d2ff" fontSize="10px" fontWeight="700" fontFamily="monospace"
-                  style={{ filter: 'drop-shadow(0 0 4px #00d2ff)' }}
-                >{p.y}</text>
-              )}
-              <text x={p.x} y={PAD.top + innerH + 14} textAnchor="middle"
-                fill={isH ? '#00d2ff' : 'rgba(255,255,255,0.45)'} fontSize="9px" fontFamily="monospace"
-              >{p.x}</text>
-            </g>
-          )
-        })}
+      <svg width={w} height={height} viewBox={`0 0 ${w} ${height}`}>
+        <polyline points="0,30 15,25 30,28 45,15 60,18 75,10 90,12 105,8 120,5" fill="none" stroke={colors[0]} strokeWidth="2" strokeLinecap="round" />
+        <polyline points="0,30 15,25 30,28 45,15 60,18 75,10 90,12 105,8 120,5" fill="none" stroke={colors[1]} strokeWidth="2" strokeLinecap="round" strokeDasharray="4,4" opacity={0.5} transform="translate(0,5)" />
       </svg>
     )
   }
-
-  /* ── PIE / DONUT ── */
-  if (chartType === 'pie' || chartType === 'donut') {
-    const R   = size === 'large' ? 120 : 90
-    const Ri  = chartType === 'donut' ? (size === 'large' ? 76 : 56) : 0
-
-    let angle = -Math.PI / 2
-    const slices = totalY === 0 ? [] : data.map((d, i) => {
-      const pct   = d.y / totalY
-      const sweep = pct * 2 * Math.PI
-      const s     = angle
-      const e     = angle + sweep
-      angle       = e
-
-      const large = pct > 0.5 ? 1 : 0
-      const c1    = Math.cos(s), s1 = Math.sin(s)
-      const c2    = Math.cos(e), s2 = Math.sin(e)
-      const mid   = s + sweep / 2
-      const cm    = Math.cos(mid), sm = Math.sin(mid)
-
-      const path = Ri > 0
-        ? `M${cx+R*c1} ${cy+R*s1} A${R} ${R} 0 ${large} 1 ${cx+R*c2} ${cy+R*s2} L${cx+Ri*c2} ${cy+Ri*s2} A${Ri} ${Ri} 0 ${large} 0 ${cx+Ri*c1} ${cy+Ri*s1} Z`
-        : `M${cx} ${cy} L${cx+R*c1} ${cy+R*s1} A${R} ${R} 0 ${large} 1 ${cx+R*c2} ${cy+R*s2} Z`
-
-      const leR  = R + (size === 'large' ? 32 : 24)
-      const lex  = cx + leR * cm
-      const ley  = cy + leR * sm
-      const eb   = lex + (cm >= 0 ? (size === 'large' ? 30 : 22) : -(size === 'large' ? 30 : 22))
-      const lx   = eb + (cm >= 0 ? 4 : -4)
-
-      return {
-        i, path,
-        color: NEON[i % NEON.length],
-        hover: { tx: cm * 8, ty: sm * 8 },
-        leader: { sx: cx + (R + 5) * cm, sy: cy + (R + 5) * sm, ex: lex, ey: ley, ebx: eb, eby: ley },
-        label: { x: lx, y: ley, anchor: cm >= 0 ? 'start' : 'end' },
-        text: `${d.x}: ${d.y} (${Math.round(pct * 100)}%)`,
-        pct: Math.round(pct * 100)
-      }
+  if (type === 'pie' || type === 'doughnut') {
+    const r = height / 2 - 4
+    const cx = w / 2, cy = height / 2
+    const segments = [
+      { start: 0, end: 0.35, fill: colors[0] },
+      { start: 0.35, end: 0.55, fill: colors[1] },
+      { start: 0.55, end: 0.70, fill: '#34D399' },
+      { start: 0.70, end: 0.85, fill: '#f59e0b' },
+      { start: 0.85, end: 1, fill: '#6366f1' },
+    ]
+    const innerR = type === 'doughnut' ? r * 0.45 : 0
+    const arcs = segments.map((s, i) => {
+      const a1 = s.start * 2 * Math.PI - Math.PI / 2
+      const a2 = s.end * 2 * Math.PI - Math.PI / 2
+      const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1)
+      const x2 = cx + r * Math.cos(a2), y2 = cy + r * Math.sin(a2)
+      const large = s.end - s.start > 0.5 ? 1 : 0
+      let d = `M${cx + innerR * Math.cos(a1)},${cy + innerR * Math.sin(a1)} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} L${cx + innerR * Math.cos(a2)},${cy + innerR * Math.sin(a2)}`
+      if (innerR > 0) d += ` A${innerR},${innerR} 0 ${large},0 ${cx + innerR * Math.cos(a1)},${cy + innerR * Math.sin(a1)}`
+      else d += ' Z'
+      return <path key={i} d={d} fill={s.fill} />
     })
-
+    if (innerR > 0) {
+      arcs.push(<circle key="hole" cx={cx} cy={cy} r={innerR} fill="#0d0d1a" />)
+    }
     return (
-      <svg viewBox={`0 0 ${W} ${H}`} className="nc-svg">
-        <defs>
-          <filter id={`glow-${animKey}`} x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur stdDeviation="5" result="blur" />
-            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
-        </defs>
-
-        {/* Reticle rings */}
-        <g opacity="0.12">
-          <circle cx={cx} cy={cy} r={R + 30} fill="none" stroke="#00d2ff" strokeWidth="0.5" strokeDasharray="3 7" />
-          <circle cx={cx} cy={cy} r={R} fill="none" stroke="#ffffff" strokeWidth="0.4" />
-          {Ri > 0 && <circle cx={cx} cy={cy} r={Ri} fill="none" stroke="#ffffff" strokeWidth="0.4" />}
-          <line x1={cx - R - 40} y1={cy} x2={cx + R + 40} y2={cy} stroke="#00d2ff" strokeWidth="0.4" />
-          <line x1={cx} y1={cy - R - 40} x2={cx} y2={cy + R + 40} stroke="#00d2ff" strokeWidth="0.4" />
-        </g>
-
-        {/* Slices */}
-        {slices.map(sl => {
-          const isH = hovered === sl.i
-          const anyH = hovered !== null
-          const op = anyH ? (isH ? 1 : 0.2) : 0.85
-
-          return (
-            <g key={sl.i}
-              onMouseEnter={() => setHovered(sl.i)}
-              onMouseLeave={() => setHovered(null)}
-              style={{ cursor: 'pointer' }}
-            >
-              {/* Leader line */}
-              {animEnabled ? (
-                <motion.path
-                  d={`M${sl.leader.sx} ${sl.leader.sy} L${sl.leader.ex} ${sl.leader.ey} L${sl.leader.ebx} ${sl.leader.eby}`}
-                  fill="none" stroke={sl.color} strokeWidth="1"
-                  strokeDasharray={isH ? 'none' : '2 3'}
-                  animate={{ opacity: ready ? op : 0 }}
-                  filter={`url(#glow-${animKey})`}
-                />
-              ) : (
-                <path
-                  d={`M${sl.leader.sx} ${sl.leader.sy} L${sl.leader.ex} ${sl.leader.ey} L${sl.leader.ebx} ${sl.leader.eby}`}
-                  fill="none" stroke={sl.color} strokeWidth="1"
-                  strokeDasharray={isH ? 'none' : '2 3'}
-                  opacity={op}
-                  filter={`url(#glow-${animKey})`}
-                />
-              )}
-              {/* Label */}
-              {animEnabled ? (
-                <motion.text
-                  x={sl.label.x} y={sl.label.y}
-                  textAnchor={sl.label.anchor} dominantBaseline="middle"
-                  fill={sl.color} fontSize={size === 'large' ? '10px' : '8.5px'}
-                  fontFamily="monospace" fontWeight="700"
-                  animate={{ opacity: ready ? op : 0 }}
-                  filter={`url(#glow-${animKey})`}
-                >{sl.text}</motion.text>
-              ) : (
-                <text
-                  x={sl.label.x} y={sl.label.y}
-                  textAnchor={sl.label.anchor} dominantBaseline="middle"
-                  fill={sl.color} fontSize={size === 'large' ? '10px' : '8.5px'}
-                  fontFamily="monospace" fontWeight="700"
-                  opacity={op}
-                  filter={`url(#glow-${animKey})`}
-                >{sl.text}</text>
-              )}
-              {/* Slice */}
-              {animEnabled ? (
-                <motion.path
-                  d={sl.path}
-                  fill={sl.color}
-                  fillOpacity={isH ? 0.4 : 0.18}
-                  stroke={sl.color}
-                  strokeWidth={isH ? 2.5 : 1.2}
-                  filter={`url(#glow-${animKey})`}
-                  animate={{
-                    x: isH ? sl.hover.tx : 0,
-                    y: isH ? sl.hover.ty : 0,
-                    opacity: ready ? op : 0
-                  }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 22 }}
-                />
-              ) : (
-                <path
-                  d={sl.path}
-                  fill={sl.color}
-                  fillOpacity={isH ? 0.4 : 0.18}
-                  stroke={sl.color}
-                  strokeWidth={isH ? 2.5 : 1.2}
-                  filter={`url(#glow-${animKey})`}
-                  style={{
-                    transform: isH ? `translate(${sl.hover.tx}px, ${sl.hover.ty}px)` : 'none',
-                    transition: 'transform 0.2s',
-                    opacity: op
-                  }}
-                />
-              )}
-            </g>
-          )
-        })}
-
-        {/* Donut centre */}
-        {chartType === 'donut' && (
-          <g pointerEvents="none">
-            <circle cx={cx} cy={cy} r={Ri - 1} fill="#06061a" />
-            <text x={cx} y={cy - 8} textAnchor="middle" fill="#4a4a6a" fontSize="9px" fontFamily="monospace">TOTAL</text>
-            <text x={cx} y={cy + 10} textAnchor="middle" fill="#00d2ff" fontSize={size === 'large' ? '20px' : '15px'}
-              fontWeight="800" fontFamily="monospace" filter={`url(#glow-${animKey})`}>{totalY}</text>
-          </g>
-        )}
+      <svg width={w} height={height} viewBox={`0 0 ${w} ${height}`}>
+        {arcs}
       </svg>
     )
   }
-
-  /* ── RADIAL BARS ── */
-  if (chartType === 'radial') {
-    const maxV   = Math.max(...data.map(d => d.y), 1)
-    const baseR  = size === 'large' ? 52 : 38
-    const step   = size === 'large' ? 20 : 16
-
-    return (
-      <svg viewBox={`0 0 ${W} ${H}`} className="nc-svg">
-        <defs>
-          <filter id={`rglow-${animKey}`} x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur stdDeviation="6" result="blur" />
-            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
-        </defs>
-
-        {data.map((d, i) => {
-          const r     = baseR + i * step
-          const circ  = 2 * Math.PI * r
-          const pct   = d.y / maxV
-          const color = NEON[i % NEON.length]
-          const isH   = hovered === i
-          const anyH  = hovered !== null
-          const op    = anyH ? (isH ? 1 : 0.25) : 0.85
-
-          const endAngle  = -Math.PI / 2 + pct * 2 * Math.PI
-          const dotX      = cx + r * Math.cos(endAngle)
-          const dotY      = cy + r * Math.sin(endAngle)
-
-          return (
-            <g key={i}
-              onMouseEnter={() => setHovered(i)}
-              onMouseLeave={() => setHovered(null)}
-              style={{ cursor: 'pointer' }}
-            >
-              {/* Track */}
-              <circle cx={cx} cy={cy} r={r} fill="none"
-                stroke="rgba(255,255,255,0.04)" strokeWidth="9" />
-              {/* Arc */}
-              {animEnabled ? (
-                <motion.circle
-                  cx={cx} cy={cy} r={r}
-                  fill="none" stroke={color}
-                  strokeWidth={isH ? 11 : 8}
-                  strokeLinecap="round"
-                  filter={`url(#rglow-${animKey})`}
-                  transform={`rotate(-90 ${cx} ${cy})`}
-                  style={{ strokeDasharray: circ }}
-                  initial={{ strokeDashoffset: circ }}
-                  animate={{ strokeDashoffset: ready ? circ * (1 - pct) : circ, opacity: op }}
-                  transition={{ duration: 1.2, ease: 'easeOut', delay: i * 0.1 }}
-                />
-              ) : (
-                <circle
-                  cx={cx} cy={cy} r={r}
-                  fill="none" stroke={color}
-                  strokeWidth={isH ? 11 : 8}
-                  strokeLinecap="round"
-                  filter={`url(#rglow-${animKey})`}
-                  transform={`rotate(-90 ${cx} ${cy})`}
-                  style={{ strokeDasharray: circ, strokeDashoffset: circ * (1 - pct) }}
-                  opacity={op}
-                />
-              )}
-              {/* Endpoint dot */}
-              {animEnabled ? (
-                <motion.circle cx={dotX} cy={dotY} r={isH ? 5 : 3}
-                  fill={color} filter={`url(#rglow-${animKey})`}
-                  animate={{ opacity: ready ? op : 0 }}
-                  transition={{ duration: 0.4, delay: 1 }}
-                />
-              ) : (
-                <circle cx={dotX} cy={dotY} r={isH ? 5 : 3}
-                  fill={color} filter={`url(#rglow-${animKey})`}
-                  opacity={op}
-                />
-              )}
-              {/* Hover tooltip */}
-              {isH && (
-                <g pointerEvents="none">
-                  <rect x={cx - 70} y={cy - 22} width="140" height="44" rx="8"
-                    fill="#08081e" stroke={color} strokeWidth="1" opacity="0.97" />
-                  <text x={cx} y={cy - 4} textAnchor="middle"
-                    fill="#6a6a8a" fontSize="9px" fontFamily="monospace">{d.x}</text>
-                  <text x={cx} y={cy + 13} textAnchor="middle"
-                    fill={color} fontSize="14px" fontWeight="800" fontFamily="monospace"
-                    filter={`url(#rglow-${animKey})`}>{d.y}</text>
-                </g>
-              )}
-            </g>
-          )
-        })}
-
-        {/* Legend */}
-        {data.map((d, i) => {
-          const anyH = hovered !== null
-          const op   = anyH ? (hovered === i ? 1 : 0.3) : 0.9
-          return (
-            <g key={`leg-${i}`} opacity={op}>
-              <rect x={W - 125} y={16 + i * 22} width="10" height="10" rx="2"
-                fill={NEON[i % NEON.length]} />
-              <text x={W - 109} y={24 + i * 22} fill="#b0b0c8"
-                fontSize="9px" fontFamily="monospace" dominantBaseline="middle">{d.x}</text>
-            </g>
-          )
-        })}
-      </svg>
-    )
-  }
-
-  return null
+  return (
+    <svg width={w} height={height} viewBox={`0 0 ${w} ${height}`}>
+      <defs>
+        <linearGradient id={`ag${colors[0]}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={colors[0]} stopOpacity={0.4} />
+          <stop offset="100%" stopColor={colors[0]} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={`M0,${height} L0,30 Q15,10 30,20 T60,15 T90,8 T120,5 L120,${height} Z`} fill={`url(#ag${colors[0]})`} />
+      <polyline points="0,30 15,18 30,20 45,12 60,15 75,10 90,8 105,6 120,5" fill="none" stroke={colors[0]} strokeWidth="2" />
+    </svg>
+  )
 }
 
-export default function GraphPage({ navigate }) {
-  const [activeTab, setActiveTab] = useState('my-workspace')
-  const [animKey,   setAnimKey]   = useState(0)
-
-  const [animEnabled, setAnimEnabled] = useState(() => {
-    try {
-      const saved = localStorage.getItem('gp-animations');
-      return saved !== null ? JSON.parse(saved) : true;
-    } catch {
-      return true;
-    }
-  });
-
-  const toggleAnim = () => {
-    setAnimEnabled(prev => {
-      const next = !prev;
-      try {
-        localStorage.setItem('gp-animations', JSON.stringify(next));
-      } catch (e) {}
-      return next;
-    });
-  }
-
-  // Conditionally disable Framer Motion animations globally for the page elements
-  const tabAnimProps = animEnabled ? {
-    initial: { opacity: 0, y: 14 },
-    animate: { opacity: 1, y: 0 },
-    exit: { opacity: 0, y: -14 },
-    transition: { duration: 0.3 }
-  } : {}
-
-  const cardAnimProps = animEnabled ? {
-    layout: true,
-    initial: { opacity: 0, scale: 0.97 },
-    animate: { opacity: 1, scale: 1 },
-    exit: { opacity: 0 },
-    transition: { duration: 0.25 }
-  } : {}
-
-  const panelAnimProps = animEnabled ? {
-    initial: { opacity: 0, height: 0 },
-    animate: { opacity: 1, height: 'auto' },
-    exit: { opacity: 0, height: 0 },
-    transition: { duration: 0.28 }
-  } : {}
-
-  const modalBgAnimProps = animEnabled ? {
-    initial: { opacity: 0 },
-    animate: { opacity: 1 },
-    exit: { opacity: 0 },
-    transition: { duration: 0.22 }
-  } : {}
-
-  const modalAnimProps = animEnabled ? {
-    initial: { scale: 0.9, y: 30, opacity: 0 },
-    animate: { scale: 1, y: 0, opacity: 1 },
-    exit: { scale: 0.9, y: 30, opacity: 0 },
-    transition: { type: 'spring', damping: 26, stiffness: 280 }
-  } : {}
-
-  const [myGraphs, setMyGraphs] = useState([
-    {
-      id: 'g1', title: 'Q2 Performance Tracker', chartType: 'bar',
-      data: [{ x: 'Apr', y: 45 }, { x: 'May', y: 80 }, { x: 'Jun', y: 150 }, { x: 'Jul', y: 110 }]
-    },
-    {
-      id: 'g2', title: 'Ad Campaign Outcomes', chartType: 'radial',
-      data: [{ x: 'Search', y: 320 }, { x: 'Social', y: 580 }, { x: 'Email', y: 190 }]
-    }
-  ])
-
-  const publicGraphs = [
-    {
-      id: 1, title: '🥇 Gold Reserves Distribution', trend: '+4.2%', isPositive: true,
-      chartType: 'pie', author: '@macro_insights', date: '2026-06-02',
-      notes: 'Strategic bullion reserves distribution across global major economies. Sovereign accumulation reflects massive hedge positioning against fiat currency debasement cycles.',
-      data: [{ x: 'Fed Reserve', y: 8130 }, { x: 'Bundesbank', y: 3350 }, { x: "B. d'Italia", y: 2450 }, { x: 'Banque FR', y: 2430 }]
-    },
-    {
-      id: 2, title: '₿ Bitcoin Exchange Outflows', trend: '+12.5%', isPositive: true,
-      chartType: 'donut', author: '@glassnode', date: '2026-06-03',
-      notes: 'Liquidity pools tracking across primary institutional exchanges. Rapid depletion signals severe supply shock threat over standard spot trading pairs.',
-      data: [{ x: 'Binance', y: 320 }, { x: 'Coinbase', y: 210 }, { x: 'Kraken', y: 95 }, { x: 'Bitfinex', y: 140 }]
-    },
-    {
-      id: 3, title: '📈 Tech Sector Growth', trend: '-2.1%', isPositive: false,
-      chartType: 'line', author: '@alpha_trader', date: '2026-06-04',
-      notes: 'Relative allocations of index capital values inside AI and computing segments. Highlights high exposure risk concentrations in mega-cap nodes.',
-      data: [{ x: 'Q1 23', y: 12 }, { x: 'Q2 23', y: 19 }, { x: 'Q3 23', y: 17 }, { x: 'Q4 23', y: 28 }, { x: 'Q1 24', y: 35 }]
-    },
-    {
-      id: 4, title: '🛢️ Crude Oil Reserves', trend: '+1.8%', isPositive: true,
-      chartType: 'bar', author: '@energy_spy', date: '2026-06-01',
-      notes: 'Crude storage capacities utilized relative to global supply targets. High import margins support structural reliance on reserve buffers.',
-      data: [{ x: 'Americas', y: 410 }, { x: 'EU', y: 180 }, { x: 'Asia-Pac', y: 320 }, { x: 'Mid-East', y: 550 }]
-    }
-  ]
-
-  /* ── Edit state ── */
-  const [editingId, setEditingId] = useState(null)
-  const [editForm,  setEditForm]  = useState(null)
-  const [modal,     setModal]     = useState(null)
-
-  const startEdit   = (g) => { setEditingId(g.id); setEditForm({ ...g, data: g.data.map(d => ({ ...d })) }) }
-  const editMeta    = (f, v) => setEditForm(p => ({ ...p, [f]: v }))
-  const editPoint   = (i, f, v) => {
-    const d = [...editForm.data]
-    d[i] = { ...d[i], [f]: f === 'y' ? (isNaN(parseFloat(v)) ? 0 : parseFloat(v)) : v }
-    setEditForm(p => ({ ...p, data: d }))
-  }
-  const removePoint = (i) => setEditForm(p => ({ ...p, data: p.data.filter((_, j) => j !== i) }))
-  const addPoint    = (x, y) => { if (!x.trim()) return; setEditForm(p => ({ ...p, data: [...p.data, { x, y: parseFloat(y) || 0 }] })) }
-  const saveEdit    = () => { setMyGraphs(p => p.map(g => g.id === editForm.id ? editForm : g)); setEditingId(null); setEditForm(null); setAnimKey(k => k + 1) }
-  const cancelEdit  = () => { setEditingId(null); setEditForm(null) }
-  const deleteGraph = (id) => {
-    if (window.confirm('Delete this graph?')) {
-      setMyGraphs(p => p.filter(g => g.id !== id))
-      if (editingId === id) cancelEdit()
-    }
-  }
-  const createGraph = () => {
-    const g = { id: `g-${Date.now()}`, title: 'New Graph', chartType: 'bar', data: [{ x: 'A', y: 50 }, { x: 'B', y: 80 }] }
-    setMyGraphs(p => [g, ...p])
-    startEdit(g)
-  }
-  const openModal   = (g) => { setModal(g); setAnimKey(k => k + 1) }
+function ChartCard({ card, navigate, onShare, onDownload }) {
+  const [liked, setLiked] = useState(false)
+  const [likeCount, setLikeCount] = useState(card.likes)
 
   return (
-    <div className="gp-root">
-      {/* BG layers */}
-      <div className="gp-grid-bg" />
-      <div className="gp-orb gp-orb-a" />
-      <div className="gp-orb gp-orb-b" />
+    <motion.div whileHover={{ y: -2, borderColor: 'rgba(0,210,255,0.2)' }}
+      onClick={() => navigate('graph-detail', { graphId: card.id })}
+      style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, display: 'flex', flexDirection: 'column', gap: 14, transition: 'border-color 0.2s', cursor: 'pointer' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.text, lineHeight: 1.4, flex: 1, paddingRight: 8 }}>{card.title}</h3>
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.green, background: `${C.green}15`, padding: '3px 8px', borderRadius: 6, whiteSpace: 'nowrap' }}>▲ {card.change}</span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0' }}>
+        <MiniChart type={card.type} colors={card.colors} height={80} />
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {card.tags.map(t => (
+          <span key={t} onClick={(e) => { e.stopPropagation(); navigate('tag', { tag: t.replace('#', '') }) }}
+            style={{ fontSize: 10, fontWeight: 600, color: C.cyan, opacity: 0.7, background: `${C.cyan}10`, padding: '3px 8px', borderRadius: 4, cursor: 'pointer' }}>{t}</span>
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+        <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); setLiked(!liked); setLikeCount(c => liked ? c - 1 : c + 1) }}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', color: liked ? '#f87171' : C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 }}>
+          <Heart size={14} fill={liked ? 'currentColor' : 'none'} /> {likeCount}
+        </motion.button>
+        <span onClick={(e) => { e.stopPropagation(); navigate('home', { assetData: { title: card.title, category: card.tags?.[0]?.replace('#','') || 'Graphs', price: card.change, image: null, seller: 'Graph Creator', sellerAvatar: null, graphId: card.id, graphTags: card.tags } }) }}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, color: C.muted, fontSize: 12, cursor: 'pointer' }}><MessageCircle size={14} /> {card.comments}</span>
+        <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); navigate('home', { repostData: { title: card.title, category: card.tags?.[0]?.replace('#','') || 'Graphs', graphId: card.id } }) }}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', color: C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 }}>
+          <Repeat2 size={14} />
+        </motion.button>
+        <div style={{ flex: 1 }} />
+        <button onClick={(e) => { e.stopPropagation(); onShare?.() }}
+          style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 0 }}><Share2 size={14} /></button>
+        <button onClick={(e) => { e.stopPropagation(); onDownload?.() }}
+          style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 0 }}><Download size={14} /></button>
+        <button onClick={(e) => { e.stopPropagation(); navigate('graph-detail', { graphId: card.id }) }}
+          style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 0 }}><Maximize2 size={14} /></button>
+      </div>
+    </motion.div>
+  )
+}
 
-      <div className="gp-container">
+export default function GraphPage({ navigate, user, fxEnabled, setFxEnabled }) {
+  const [viewMode, setViewMode] = useState('dashboard')
+  const [category, setCategory] = useState('All Categories')
+  const [showCatDrop, setShowCatDrop] = useState(false)
+  const [showShare, setShowShare] = useState(false)
+  const [shareData, setShareData] = useState({})
+  const [showDownload, setShowDownload] = useState(false)
+  const [downloadData, setDownloadData] = useState({})
+  const { graphs } = useGraphStore()
+  const { avatar: globalAvatar, displayName: globalDisplayName } = useUserAvatar()
 
-        {/* HEADER */}
-        <header className="gp-header">
-          <div className="gp-header-left">
-            <button className="gp-back-btn" onClick={() => navigate('home')}>
-              <ArrowLeft size={16} />
-            </button>
-            <div>
-              <div className="gp-status-pill">
-                <span className="gp-pulse-dot" />
-                LIVE · TELEMETRY v2
-              </div>
-              <h1 className="gp-page-title">GRAPH INTELLIGENCE</h1>
-            </div>
-          </div>
+  const displayName = globalDisplayName || user?.username || 'Epic Legend'
+  const handle = user?.handle || '@epic.legend'
+  const avatar = globalAvatar || user?.avatar || ''
 
-          <button
-            className={`gp-anim-toggle ${animEnabled ? 'on' : ''}`}
-            onClick={toggleAnim}
-            title="Toggle chart animations"
-          >
-            <span className="gp-toggle-dot" />
-            {animEnabled ? 'Animations ON' : 'Animations OFF'}
+  const filteredGraphs = category === 'All Categories'
+    ? graphs
+    : graphs.filter(g => g.tags.some(t => t.toLowerCase().includes(category.toLowerCase())))
+
+  return (
+    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <header style={{ background: `${C.surface}ee`, backdropFilter: 'blur(12px)', borderBottom: `1px solid ${C.border}`, padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={() => navigate('home')} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4 }}>
+            <ArrowLeft size={20} />
           </button>
-
-          <div className="gp-tabs">
-            {[
-              { key: 'my-workspace', icon: <Settings size={13} />, label: 'My Workspace' },
-              { key: 'public-feed',  icon: <Compass size={13} />,  label: 'Global Feed'  }
-            ].map(t => (
-              <button
-                key={t.key}
-                className={`gp-tab ${activeTab === t.key ? 'active' : ''}`}
-                onClick={() => setActiveTab(t.key)}
-              >
-                {t.icon} {t.label}
-              </button>
-            ))}
-          </div>
-        </header>
-
-        {/* ════ MY WORKSPACE ════ */}
-        <AnimatePresence mode="wait">
-        {activeTab === 'my-workspace' && (
-          <motion.div key="ws" {...tabAnimProps}>
-            <div className="gp-bar">
-              <div>
-                <h3 className="gp-bar-title">My Data Graphs</h3>
-                <p className="gp-bar-sub">Build and edit your personal charts — bar, line, pie and more.</p>
-              </div>
-              <button className="gp-create-btn" onClick={createGraph}>
-                <Plus size={14} /> New Graph
-              </button>
+          <span style={{ fontSize: 16, fontWeight: 800, color: C.text }}>neutron<span style={{ color: C.cyan }}>.graphs</span></span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+          <button onClick={() => setViewMode('dashboard')}
+            style={{ background: 'none', border: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '0.5px', cursor: 'pointer', padding: '4px 0', color: viewMode === 'dashboard' ? C.cyan : C.muted, borderBottom: viewMode === 'dashboard' ? `2px solid ${C.cyan}` : '2px solid transparent', transition: 'all 0.2s' }}>
+            GLOBAL FEED
+          </button>
+          <button onClick={() => setViewMode('creator')}
+            style={{ background: 'none', border: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '0.5px', cursor: 'pointer', padding: '4px 0', color: viewMode === 'creator' ? C.cyan : C.muted, borderBottom: viewMode === 'creator' ? `2px solid ${C.cyan}` : '2px solid transparent', transition: 'all 0.2s' }}>
+            CREATOR STUDIO
+          </button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: C.muted }}>
+            FX:
+            <div onClick={() => setFxEnabled && setFxEnabled(!fxEnabled)}
+              style={{ width: 32, height: 18, borderRadius: 9, background: fxEnabled ? C.cyan : C.dim, position: 'relative', cursor: 'pointer', transition: 'background 0.2s' }}>
+              <div style={{ width: 14, height: 14, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: fxEnabled ? 16 : 2, transition: 'left 0.2s' }} />
             </div>
+          </div>
+          <button onClick={() => navigate('notifications')}
+            style={{ position: 'relative', background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4 }}>
+            <Bell size={18} />
+            <span style={{ position: 'absolute', top: -2, right: -2, width: 8, height: 8, borderRadius: '50%', background: C.red }} />
+          </button>
+          <div onClick={() => navigate('profile')} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <div style={{ width: 32, height: 32, borderRadius: 10, background: avatar ? `url(${avatar}) center/cover` : `linear-gradient(135deg, ${C.cyan}, ${C.purple})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#fff' }}>
+              {!avatar && displayName[0]?.toUpperCase()}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{displayName}</span>
+              <span style={{ fontSize: 10, color: C.cyan }}>{handle}</span>
+            </div>
+          </div>
+        </div>
+      </header>
 
-            <div className="gp-ws-grid">
-              {myGraphs.map(graph => {
-                const isE   = editingId === graph.id
-                const active = isE ? editForm : graph
+      {/* Body */}
+      <div style={{ display: 'flex', flex: 1, maxWidth: 1400, width: '100%', margin: '0 auto' }}>
+        {/* Sidebar */}
+        <aside style={{ width: 220, flexShrink: 0, padding: '20px 16px', borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 4 }} className="graph-sidebar">
+          {SIDEBAR_NAV.map(item => {
+            const Icon = item.icon
+            const navMap = { explorer: 'explorer', graphs: 'graphs', ai: 'ai-insights' }
+            return (
+              <button key={item.id} onClick={() => navigate(navMap[item.id] || 'graphs')}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, width: '100%', textAlign: 'left', transition: 'all 0.15s',
+                  background: item.active ? `${C.cyan}12` : 'transparent', color: item.active ? C.cyan : C.muted }}>
+                <Icon size={18} /> {item.label}
+                {item.badge && <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, color: '#22c55e', background: '#22c55e18', padding: '2px 6px', borderRadius: 4 }}>{item.badge}</span>}
+              </button>
+            )
+          })}
+        </aside>
 
-                return (
-                  <motion.div key={graph.id} className={`gp-ws-card ${isE ? 'editing' : ''}`} {...cardAnimProps}>
-                    <div className="gp-card-shine" />
-
-                    {/* Card top bar */}
-                    <div className="gp-card-top">
-                      {isE ? (
-                        <input className="gp-rename-input" value={active.title}
-                          onChange={e => editMeta('title', e.target.value)} placeholder="Graph title..." />
-                      ) : (
-                        <div className="gp-card-name-row">
-                          <BarChart2 size={13} color="#00d2ff" />
-                          <span className="gp-card-name">{active.title}</span>
-                        </div>
-                      )}
-
-                      <div className="gp-card-btns">
-                        {!isE ? (
-                          <>
-                            <button className="gp-cbtn edit" onClick={() => startEdit(graph)}>
-                              <Edit3 size={11} /> Edit
-                            </button>
-                            <button className="gp-cbtn del" onClick={() => deleteGraph(graph.id)}>
-                              <Trash2 size={11} />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button className="gp-cbtn save" onClick={saveEdit}>
-                              <Save size={11} /> Save
-                            </button>
-                            <button className="gp-cbtn cancel" onClick={cancelEdit}>Cancel</button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Edit panel */}
-                    <AnimatePresence>
-                    {isE && (
-                      <motion.div className="gp-edit-panel" {...panelAnimProps}>
-                        {/* Chart type pills */}
-                        <div className="gp-ep-row">
-                          <label className="gp-ep-label">Chart Type</label>
-                          <div className="gp-type-pills">
-                            {CHART_TYPES.map(ct => (
-                              <button key={ct.key}
-                                className={`gp-type-pill ${active.chartType === ct.key ? 'active' : ''}`}
-                                onClick={() => editMeta('chartType', ct.key)}
-                              >
-                                <span>{ct.icon}</span> {ct.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Data rows */}
-                        <div className="gp-ep-row">
-                          <label className="gp-ep-label">Data Points ({active.data.length})</label>
-                          <div className="gp-data-list">
-                            {active.data.map((pt, i) => (
-                              <div key={i} className="gp-data-row">
-                                <input className="gp-dp-input lbl" value={pt.x} placeholder="Label"
-                                  onChange={e => editPoint(i, 'x', e.target.value)} />
-                                <input className="gp-dp-input val" type="number" value={pt.y} placeholder="Value"
-                                  onChange={e => editPoint(i, 'y', e.target.value)} />
-                                <button className="gp-dp-del" onClick={() => removePoint(i)}><X size={11} /></button>
-                              </div>
-                            ))}
-                            <PointAdder onAdd={addPoint} />
-                          </div>
-                        </div>
+        {/* Main content */}
+        <main style={{ flex: 1, padding: '20px 24px', minWidth: 0 }}>
+          <AnimatePresence mode="wait">
+            {viewMode === 'creator' ? (
+              <motion.div key="creator" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.25 }}>
+                <CreatorStudio onBack={() => setViewMode('dashboard')} />
+              </motion.div>
+            ) : (
+              <motion.div key="dashboard" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.25 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                  <div>
+                    <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Market Graphs</h1>
+                    <p style={{ margin: '4px 0 0', fontSize: 13, color: C.muted }}>Visualize real-time market trends and on-chain insights.</p>
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <button onClick={() => setShowCatDrop(!showCatDrop)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.text, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      {category} <ChevronDown size={14} />
+                    </button>
+                    {showCatDrop && (
+                      <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+                        style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: 4, zIndex: 50, minWidth: 160 }}>
+                        {['All Categories', 'Crypto', 'Finance', 'Biotech', 'Web3', 'AI'].map(c => (
+                          <button key={c} onClick={() => { setCategory(c); setShowCatDrop(false) }}
+                            style={{ display: 'block', width: '100%', padding: '8px 12px', background: category === c ? `${C.cyan}15` : 'transparent', border: 'none', borderRadius: 6, color: category === c ? C.cyan : C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', textAlign: 'left' }}>
+                            {c}
+                          </button>
+                        ))}
                       </motion.div>
                     )}
-                    </AnimatePresence>
-
-                    {/* Chart */}
-                    <div className="gp-card-chart">
-                      <NeonChart
-                        dataPoints={active.data}
-                        chartType={active.chartType}
-                        animKey={isE ? 999 : animKey}
-                        animEnabled={animEnabled}
-                      />
-                    </div>
-                  </motion.div>
-                )
-              })}
-
-              {myGraphs.length === 0 && (
-                <div className="gp-empty-state">
-                  <BarChart2 size={40} opacity={0.15} color="#00d2ff" />
-                  <p>No graphs yet. Click "New Graph" to get started.</p>
+                  </div>
                 </div>
-              )}
-            </div>
-          </motion.div>
-        )}
 
-        {/* ════ PUBLIC FEED ════ */}
-        {activeTab === 'public-feed' && (
-          <motion.div key="feed" {...tabAnimProps}>
-            <div className="gp-bar">
-              <div>
-                <h3 className="gp-bar-title">Global Intel Feed</h3>
-                <p className="gp-bar-sub">Click any card to inspect detailed data and community discussions.</p>
+                {/* Chart cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16, marginBottom: 32 }}>
+                  {filteredGraphs.map(card => <ChartCard key={card.id} card={card} navigate={navigate} onShare={() => { setShareData({ graphId: card.id, graphTitle: card.title }); setShowShare(true) }} onDownload={() => { setDownloadData(card); setShowDownload(true) }} />)}
+                </div>
+
+                {/* Top Insights */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Zap size={16} color={C.cyan} />
+                      <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.text }}>Top Insights</h2>
+                    </div>
+                    <button onClick={() => navigate('ai-insights')}
+                      style={{ background: 'none', border: 'none', color: C.cyan, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      View all insights <ChevronDown size={14} style={{ transform: 'rotate(-90deg)' }} />
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {INSIGHTS.map((ins, i) => (
+                      <motion.div key={i} whileHover={{ background: C.cardHover }}
+                        onClick={() => navigate('profile', { author: { name: ins.creator.name, handle: ins.creator.handle, avatar: ins.creator.avatar, verified: ins.creator.verified } })}
+                        style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 10, cursor: 'pointer', transition: 'background 0.15s' }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 10, background: `url(${ins.creator.avatar}) center/cover`, flexShrink: 0 }} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{ins.creator.name}</span>
+                          {ins.creator.verified && <span style={{ width: 14, height: 14, borderRadius: '50%', background: C.cyan, color: '#fff', fontSize: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, flexShrink: 0 }}>✓</span>}
+                        </div>
+                        <span style={{ fontSize: 13, color: C.text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ins.title}</span>
+                        <div style={{ flexShrink: 0, opacity: 0.7 }}><MiniChart type={ins.miniType} colors={[C.cyan, C.purple]} height={24} /></div>
+                        <span style={{ fontSize: 11, color: C.muted, flexShrink: 0, whiteSpace: 'nowrap' }}>{ins.time}</span>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </main>
+
+        {/* Right sidebar — Market Overview */}
+        {viewMode === 'dashboard' && (
+          <aside style={{ width: 260, flexShrink: 0, padding: '20px 16px', borderLeft: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 20 }} className="graph-sidebar-right">
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.text }}>Market Overview</h3>
+                <Info size={14} color={C.muted} />
               </div>
-              <div className="gp-live-chip">
-                <Activity size={11} /> LIVE
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {MARKET_DATA.map(m => (
+                  <div key={m.symbol} onClick={() => navigate('asset', { symbol: m.symbol })}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '4px 0' }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: `${m.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: m.color, flexShrink: 0 }}>{m.icon}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.text }}>{m.name} ({m.symbol})</p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.text }}>{m.price}</p>
+                      <p style={{ margin: 0, fontSize: 11, color: C.green, fontWeight: 600 }}>{m.change}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
+              <button onClick={() => navigate('markets')}
+                style={{ marginTop: 14, width: '100%', padding: '10px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                View all markets <ChevronDown size={14} style={{ transform: 'rotate(-90deg)' }} />
+              </button>
             </div>
-
-            <div className="gp-pub-grid">
-              {publicGraphs.map((g, idx) => {
-                const pubCardAnimProps = animEnabled ? {
-                  whileHover: { y: -4, scale: 1.01 },
-                  whileTap: { scale: 0.98 },
-                  initial: { opacity: 0, y: 18 },
-                  animate: { opacity: 1, y: 0 },
-                  transition: { duration: 0.35, delay: idx * 0.07 }
-                } : {}
-
-                return (
-                  <motion.div key={g.id} className="gp-pub-card" onClick={() => openModal(g)} {...pubCardAnimProps}>
-                    <div className="gp-pub-shine" />
-
-                    {/* Hover overlay */}
-                    <div className="gp-pub-hover-layer">
-                      <Eye size={20} />
-                      <span>INSPECT NODE</span>
-                    </div>
-
-                    {/* Card header */}
-                    <div className="gp-pub-top">
-                      <div>
-                        <h4 className="gp-pub-title">{g.title}</h4>
-                        <span className="gp-pub-author">by {g.author} · {g.date}</span>
-                      </div>
-                      <span className={`gp-trend ${g.isPositive ? 'pos' : 'neg'}`}>
-                        <TrendingUp size={10} /> {g.trend}
-                      </span>
-                    </div>
-
-                    {/* Chart preview */}
-                    <div className="gp-pub-chart">
-                      <NeonChart dataPoints={g.data} chartType={g.chartType} animKey={0} animEnabled={animEnabled} />
-                    </div>
-                  </motion.div>
-                )
-              })}
-            </div>
-          </motion.div>
+          </aside>
         )}
-        </AnimatePresence>
       </div>
 
-      {/* ════ MODAL ════ */}
-      <AnimatePresence>
-      {modal && (
-        <motion.div className="gp-modal-bg" {...modalBgAnimProps} onClick={() => setModal(null)}>
-          <motion.div className="gp-modal" {...modalAnimProps} onClick={e => e.stopPropagation()}>
-            {/* Modal header */}
-            <div className="gp-modal-head">
-              <div>
-                <h3 className="gp-modal-title">{modal.title}</h3>
-                <div className="gp-modal-chips">
-                  <span className="gp-chip"><User size={10} /> {modal.author}</span>
-                  <span className="gp-chip"><Calendar size={10} /> {modal.date}</span>
-                  <span className="gp-chip cyan"><Zap size={10} /> VERIFIED</span>
-                  <span className={`gp-chip ${modal.isPositive ? 'green' : 'red'}`}>{modal.trend}</span>
-                </div>
-              </div>
-              <button className="gp-modal-x" onClick={() => setModal(null)}><X size={17} /></button>
-            </div>
+      {/* Modals */}
+      <ShareModal isOpen={showShare} onClose={() => setShowShare(false)} graphId={shareData.graphId} graphTitle={shareData.graphTitle} navigate={navigate} />
+      <GraphDownloadModal isOpen={showDownload} onClose={() => setShowDownload(false)} graph={downloadData} />
 
-            {/* Modal body */}
-            <div className="gp-modal-body">
-
-              {/* Left side */}
-              <div className="gp-modal-left">
-                <div className="gp-modal-chart-box">
-                  <NeonChart dataPoints={modal.data} chartType={modal.chartType} size="large" animKey={animKey} animEnabled={animEnabled} />
-                </div>
-
-                <div className="gp-modal-info">
-                  <div className="gp-info-head"><Info size={12} color="#00d2ff" /> Research Notes</div>
-                  <p className="gp-info-text">{modal.notes}</p>
-
-                  <div className="gp-info-head" style={{ marginTop: 14 }}>
-                    <LayoutGrid size={12} color="#00d2ff" /> Metrics Breakdown
-                  </div>
-                  <div className="gp-table-wrap">
-                    <table className="gp-table">
-                      <thead><tr><th>Label</th><th>Value</th><th>Share</th></tr></thead>
-                      <tbody>
-                        {modal.data.map((d, i) => {
-                          const tot   = modal.data.reduce((s, x) => s + (parseFloat(x.y) || 0), 0)
-                          const share = tot > 0 ? Math.round((d.y / tot) * 100) : 0
-                          const col   = NEON[i % NEON.length]
-                          return (
-                            <tr key={i}>
-                              <td>
-                                <span className="gp-tdot" style={{ background: col, boxShadow: `0 0 6px ${col}` }} />
-                                {d.x}
-                              </td>
-                              <td style={{ color: col, fontWeight: 700 }}>{d.y}</td>
-                              <td>
-                                <div className="gp-share-row">
-                                  <div className="gp-share-bar" style={{ width: `${share}%`, background: col, boxShadow: `0 0 6px ${col}` }} />
-                                  <span>{share}%</span>
-                                </div>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right side: Intel stream */}
-              <div className="gp-modal-right">
-                <div className="gp-stream-head">
-                  <MessageSquare size={13} color="#a855f7" /> Related Intel Stream
-                </div>
-                <div className="gp-stream-list">
-                  {(INTEL_STREAMS[modal.id] || []).map(post => (
-                    <div key={post.id} className="gp-post">
-                      <div className="gp-post-meta">
-                        <span className="gp-post-who">{post.author}</span>
-                        <span className="gp-post-live">● LIVE</span>
-                      </div>
-                      <p className="gp-post-body">{post.content}</p>
-                      <div className="gp-post-acts">
-                        <button className="gp-pact heart"><Heart size={11} /> {post.likes}</button>
-                        <button className="gp-pact msg"><MessageSquare size={11} /> {post.comments}</button>
-                        <button className="gp-pact share"><Share2 size={11} /></button>
-                      </div>
-                    </div>
-                  ))}
-                  {!(INTEL_STREAMS[modal.id] || []).length && (
-                    <div className="gp-stream-empty">
-                      <MessageSquare size={22} opacity={0.2} />
-                      <p>No discussions yet</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-      </AnimatePresence>
+      <style>{`
+        @media (max-width: 1024px) {
+          .graph-sidebar, .graph-sidebar-right { display: none !important; }
+        }
+      `}</style>
     </div>
   )
 }
-
-/* ── Helper: Add point row ── */
-function PointAdder({ onAdd }) {
-  const [x, setX] = useState('')
-  const [y, setY] = useState('')
-  const go = () => { if (!x.trim()) return; onAdd(x, y); setX(''); setY('') }
-  return (
-    <div className="gp-data-row add-row">
-      <input className="gp-dp-input lbl" placeholder="New label..." value={x}
-        onChange={e => setX(e.target.value)} onKeyDown={e => e.key === 'Enter' && go()} />
-      <input className="gp-dp-input val" type="number" placeholder="Value" value={y}
-        onChange={e => setY(e.target.value)} onKeyDown={e => e.key === 'Enter' && go()} />
-      <button className="gp-dp-add" onClick={go} disabled={!x.trim()} type="button"><Plus size={12} /></button>
-    </div>
-  )
-}
-

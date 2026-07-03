@@ -1,0 +1,73 @@
+
+/* Custom premium futuristic utility components */
+.text-glow {
+  text-shadow: 0 0 10px rgba(0, 191, 255, 0.4), 0 0 2px rgba(0, 191, 255, 0.2);
+}
+
+.bg-glow {
+  box-shadow: 0 0 15px rgba(0, 191, 255, 0.05) inset;
+}
+
+/* Glassmorphism card and panel helpers */
+.sleek-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sleek-card:hover {
+  border-color: rgba(0, 191, 255, 0.4);
+  box-shadow: 0 10px 30px -10px rgba(0, 191, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Glass interactive items */
+.sleek-interactive {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sleek-interactive:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.sleek-btn-primary {
+  background: linear-gradient(135deg, #00BFFF 0%, #0080FF 100%);
+  color: #020617;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 20px rgba(0, 191, 255, 0.25);
+}
+
+.sleek-btn-primary:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 6px 24px rgba(0, 191, 255, 0.35);
+  transform: translateY(-1px);
+}
+
+.sleek-btn-primary:active {
+  transform: translateY(0);
+}
+
+/* Smooth custom glass scrolling handles */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #020617;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00BFFF;
+}

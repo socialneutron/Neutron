@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth, db } from './firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
+import { auth } from './firebase';
+import { useAuth } from './context/AuthContext';
 import SplashScreen from './pages/SplashScreen';
 import WelcomeScreen from './pages/WelcomeScreen';
 import AuthPage from './pages/AuthPage';
@@ -17,59 +17,52 @@ import SettingsPage from './pages/SettingsPage';
 import GraphPage from './pages/GraphPage';
 import BottomNav from './components/BottomNav';
 import StoreVerification from './pages/StoreVerification';
+import StoreCreated from './pages/StoreCreated';
+import Hero from './components/landing/Hero';
+import LoginCard from './components/auth/LoginCard';
+import RegisterCard from './components/auth/RegisterCard';
+import VerifyOtp from './components/auth/VerifyOtp';
+import TwoFactorVerify from './components/auth/TwoFactorVerify';
+import ForgotPassword from './components/auth/ForgotPassword';
+import ResetPassword from './components/auth/ResetPassword';
+import SessionSettings from './components/profile/SessionSettings';
+import NotificationsPage from './pages/NotificationsPage';
+import PostDetail from './pages/social/PostDetail';
+import PostDiscussionPage from './pages/social/PostDiscussionPage';
+import BookmarksPage from './pages/social/BookmarksPage';
+import ExplorePage from './pages/ExplorePage';
+import { GraphDetailPage, ExplorerPage, AiInsightsPage, WatchlistPage, TagFeedPage, AssetDetailPage, MarketsPage, PortfolioPage } from './pages/graphs';
 
 export default function App() {
+  const { user, loading } = useAuth()
   const [currentPage, setCurrentPage] = useState('splash')
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [selectedTopic, setSelectedTopic] = useState(null)
   const [chatRecipient, setChatRecipient] = useState(null)
-
+  const [sharedAssetData, setSharedAssetData] = useState(null)
+  const [authParams, setAuthParams] = useState({})
+  const [profileAuthor, setProfileAuthor] = useState(null)
+  const [navParams, setNavParams] = useState({})
+  const [fxEnabled, setFxEnabled] = useState(true)
 
   useEffect(() => {
-    let unsubscribeSnapshot = null;
-
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        // Listen to real-time updates from Firestore for this user
-        unsubscribeSnapshot = onSnapshot(doc(db, 'users', firebaseUser.uid), (userDoc) => {
-          const userData = userDoc.exists() ? userDoc.data() : { 
-            username: firebaseUser.displayName || 'neutron_user', 
-            email: firebaseUser.email,
-            uid: firebaseUser.uid
-          }
-          setUser({ ...userData, uid: firebaseUser.uid })
-          
-          setCurrentPage(prev => (['splash', 'welcome', 'login', 'signup'].includes(prev)) ? 'home' : prev)
-          setLoading(false)
-        }, (error) => {
-          console.error("Firestore users snapshot error (expected if database is not created in Firebase console):", error)
-          setUser({ 
-            username: firebaseUser.displayName || 'neutron_user', 
-            email: firebaseUser.email,
-            uid: firebaseUser.uid,
-            reputation: 4.5
-          })
-          setCurrentPage(prev => (['splash', 'welcome', 'login', 'signup'].includes(prev)) ? 'home' : prev)
-          setLoading(false)
-        })
-      } else {
-        setUser(null)
-        setCurrentPage(prev => (!['splash', 'welcome', 'signup', 'login'].includes(prev)) ? 'welcome' : prev)
-        setLoading(false)
-        if (unsubscribeSnapshot) unsubscribeSnapshot()
-      }
-    })
-
-    return () => {
-      unsubscribe()
-      if (unsubscribeSnapshot) unsubscribeSnapshot()
+    if (loading) return
+    if (user) {
+      setCurrentPage(prev => (['splash', 'welcome', 'login', 'signup'].includes(prev)) ? 'home' : prev)
+    } else {
+      setCurrentPage(prev => (!['splash', 'welcome', 'signup', 'login'].includes(prev)) ? 'welcome' : prev)
     }
-  }, [])
+  }, [user, loading])
 
   const navigate = (page, params = {}) => {
     if (params.topic) setSelectedTopic(params.topic)
     if (params.chat) setChatRecipient(params.chat)
+    if (params.assetData) setSharedAssetData(params.assetData)
+    if (params.author) {
+      setProfileAuthor(params.author)
+    } else if (page !== 'profile') {
+      setProfileAuthor(null)
+    }
+    setNavParams(params)
     setCurrentPage(page)
   }
 
@@ -78,60 +71,122 @@ export default function App() {
     navigate('welcome')
   }
 
-  const mainPages = ['home', 'chat', 'graphs', 'create', 'business', 'profile']
+  const mainPages = ['home', 'chat', 'explore', 'graphs', 'create', 'business', 'profile']
+
+  const graphSubPages = ['graph-detail', 'explorer', 'ai-insights', 'watchlist', 'tag', 'asset', 'markets', 'portfolio']
+
+  const subPages = ['notifications', 'settings', 'post', 'bookmarks', 'explore', 'topic', ...graphSubPages]
+
+  const navigateAuth = (page, params) => {
+    if (params) setAuthParams(params)
+    const pageMap = {
+      'login': 'login', 'register': 'register', 'verify': 'verify', '2fa': '2fa',
+      'forgot-password': 'forgot-password', 'reset-password': 'reset-password',
+      'sessions': 'sessions', 'home': 'home', 'landing': 'landing',
+    }
+    navigate(pageMap[page] || page, params)
+  }
 
   const renderPage = () => {
     switch (currentPage) {
       case 'splash':
         return <SplashScreen key="splash" onFinish={() => navigate('welcome')} />
       case 'welcome':
-        return <WelcomeScreen key="welcome" onLogin={() => navigate('login')} onSignup={() => navigate('signup')} />
+        return <WelcomeScreen key="welcome" onLogin={() => navigate('login')} onSignup={() => navigate('signup')} onExplore={() => navigate('home')} />
       case 'signup':
       case 'login':
         return <AuthPage key="auth" initialMode={currentPage} navigate={navigate} />
+      case 'register':
+        return <RegisterCard key="register" onNavigate={navigateAuth} />
+      case 'verify':
+        return <VerifyOtp key="verify" onNavigate={navigateAuth} params={{ email: authParams.email }} />
+      case '2fa':
+        return <TwoFactorVerify key="2fa" onNavigate={navigateAuth} params={{ userId: user?.uid }} />
+      case 'forgot-password':
+        return <ForgotPassword key="forgot-password" onNavigate={navigateAuth} />
+      case 'reset-password':
+        return <ResetPassword key="reset-password" onNavigate={navigateAuth} params={{ token: 'reset_token_placeholder' }} />
+      case 'sessions':
+        return <SessionSettings key="sessions" onNavigate={navigateAuth} />
+      case 'landing':
+        return <Hero key="landing" onNavigate={navigateAuth} />
       case 'onboarding':
-        return <OnboardingFlow key="onboarding" onFinish={() => navigate('home')} />
+        return <OnboardingFlow key="onboarding" onFinish={() => navigate('home')} navigate={navigate} />
       case 'home':
-        return <HomeFeed key="home" navigate={navigate} user={user} />
+        return <HomeFeed key="home" navigate={navigate} user={user} sharedAssetData={sharedAssetData} onClearAssetData={() => setSharedAssetData(null)} />
       case 'topic':
         return <TopicHub key="topic" topic={selectedTopic} navigate={navigate} />
       case 'create':
         return <PostCreation key="create" navigate={navigate} />
       case 'chat':
-        return <ChatSystem key="chat" recipient={chatRecipient} navigate={navigate} />
+        return <ChatSystem key="chat" recipient={chatRecipient} navigate={navigate} user={user} />
       case 'profile':
-        return <ProfilePage key="profile" user={user} navigate={navigate} />
+        return <ProfilePage key={`profile-${profileAuthor?.name || 'self'}`} user={user} navigate={navigate} profileAuthor={profileAuthor} />
       case 'business':
-        return <BusinessPage key="business" navigate={navigate} />
+        return <BusinessPage key="business" navigate={navigate} user={user} />
+      case 'notifications':
+        return <NotificationsPage key="notifications" navigate={navigate} />
+      case 'post':
+        return <PostDiscussionPage key="post" postId={navParams.postId} navigate={navigate} />
+      case 'bookmarks':
+        return <BookmarksPage key="bookmarks" navigate={navigate} />
+      case 'explore':
+        return <ExplorePage key="explore" navigate={navigate} />
       case 'storeVerification':
         return <StoreVerification key="storeVerification" navigate={navigate} />
-
+      case 'storeCreated':
+        return <StoreCreated key="storeCreated" navigate={navigate} />
       case 'settings':
         return <SettingsPage key="settings" navigate={navigate} onLogout={handleLogout} />
       case 'graphs':
-        return <GraphPage key="graphs" navigate={navigate} />
+        return <GraphPage key="graphs" navigate={navigate} user={user} fxEnabled={fxEnabled} setFxEnabled={setFxEnabled} />
+      case 'graph-detail':
+        return <GraphDetailPage key="graph-detail" graphId={navParams.graphId || 'g1'} navigate={navigate} user={user} />
+      case 'explorer':
+        return <ExplorerPage key="explorer" navigate={navigate} user={user} />
+      case 'ai-insights':
+        return <AiInsightsPage key="ai-insights" navigate={navigate} user={user} />
+      case 'watchlist':
+        return <WatchlistPage key="watchlist" navigate={navigate} user={user} />
+      case 'tag':
+        return <TagFeedPage key="tag" tag={navParams.tag || 'AI'} navigate={navigate} user={user} />
+      case 'asset':
+        return <AssetDetailPage key="asset" symbol={navParams.symbol || 'BTC'} navigate={navigate} user={user} />
+      case 'markets':
+        return <MarketsPage key="markets" navigate={navigate} user={user} />
+      case 'portfolio':
+        return <PortfolioPage key="portfolio" navigate={navigate} user={user} />
       default:
-        return <HomeFeed key="default" navigate={navigate} user={user} />
+        return <HomeFeed key="default" navigate={navigate} user={user} sharedAssetData={sharedAssetData} onClearAssetData={() => setSharedAssetData(null)} />
     }
   }
 
-  if (loading) return null // Or a loading spinner
+  if (loading) return (
+    <div style={{ minHeight: '100vh', background: '#05050A', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+        style={{ width: 32, height: 32, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#00D2FF', borderRadius: '50%' }} />
+    </div>
+  )
+
+  const showBottomNav = mainPages.includes(currentPage) || subPages.includes(currentPage)
+
+  const BOTTOM_NAV_HEIGHT = 72
 
   return (
-    <div className="app-container" style={{ background: 'var(--bg-color)', minHeight: '100vh' }}>
+    <div className="app-container" style={{ background: 'var(--bg-color)', height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <AnimatePresence mode="wait">
         <motion.div
-          key={currentPage}
+          key={currentPage + JSON.stringify(navParams)}
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
           transition={{ duration: 0.4, ease: "easeInOut" }}
-          style={{ width: '100%', height: '100%' }}
+          style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}
         >
           {renderPage()}
         </motion.div>
       </AnimatePresence>
-      {mainPages.includes(currentPage) && (
+      {showBottomNav && (
         <BottomNav currentPage={currentPage} navigate={navigate} />
       )}
     </div>

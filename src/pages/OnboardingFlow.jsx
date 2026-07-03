@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import './OnboardingFlow.css'
 
 const TOPICS = [
@@ -16,7 +17,7 @@ const TOPICS = [
   { id: 'geopolitics', label: 'Geopolitics', icon: '⚡', desc: 'World conflicts & alliances' },
 ]
 
-export default function OnboardingFlow({ onFinish }) {
+export default function OnboardingFlow({ onFinish, navigate }) {
   const [selected, setSelected] = useState([])
   const [done, setDone] = useState(false)
 
@@ -35,6 +36,11 @@ export default function OnboardingFlow({ onFinish }) {
       <div className="onb-bg-orb orb-2"/>
 
       <div className="onb-header">
+        {navigate && (
+          <button onClick={() => navigate('welcome')} style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, zIndex: 10 }}>
+            <ArrowLeft size={20} />
+          </button>
+        )}
         <div className="onb-logo">
           <span className="neon-text" style={{ fontWeight: 800, fontSize: '22px', letterSpacing: '-0.5px' }}>NEUTRON</span>
         </div>

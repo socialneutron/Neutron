@@ -1,50 +1,59 @@
-import { Home, MessageCircle, Plus, Briefcase, User, TrendingUp } from 'lucide-react'
+import { Home, MessageCircle, Plus, Briefcase, User, TrendingUp, Compass } from 'lucide-react'
 import './BottomNav.css'
 
-const NAV_ITEMS = [
-  { id: 'home',          label: 'Home',      icon: Home },
-  { id: 'chat',          label: 'Chat',      icon: MessageCircle },
-  { id: 'graphs',        label: 'Graphs',    icon: TrendingUp },
-  { id: 'create',        label: 'Create',    icon: Plus,  special: true },
-  { id: 'business',      label: 'Business',  icon: Briefcase },
-  { id: 'profile',       label: 'Profile',   icon: User },
+const LEFT_ITEMS = [
+  { id: 'home',    label: 'Home',    icon: Home },
+  { id: 'chat',    label: 'Chat',    icon: MessageCircle },
+  { id: 'explore', label: 'Explore', icon: Compass },
 ]
+
+const RIGHT_ITEMS = [
+  { id: 'graphs',   label: 'Graphs',   icon: TrendingUp },
+  { id: 'business', label: 'Business', icon: Briefcase },
+  { id: 'profile',  label: 'Profile',  icon: User },
+]
+
+const CREATE_ITEM = { id: 'create', label: '', icon: Plus, special: true }
+
+function NavItem({ item, isActive, navigate }) {
+  const Icon = item.icon
+  return (
+    <button
+      className={`nav-item-btn ${isActive ? 'nav-active' : ''}`}
+      onClick={() => navigate(item.id)}
+      id={`nav-${item.id}`}
+    >
+      <span className="nav-icon-wrap">
+        <Icon size={22}/>
+        {isActive && <span className="nav-active-dot"/>}
+      </span>
+      <span className="nav-label">{item.label}</span>
+    </button>
+  )
+}
 
 export default function BottomNav({ currentPage, navigate }) {
   return (
     <nav className="bottom-nav" id="bottom-nav">
-      {NAV_ITEMS.map(item => {
-        const Icon = item.icon
-        const isActive = currentPage === item.id
+      <div className="nav-group nav-group-left">
+        {LEFT_ITEMS.map(item => (
+          <NavItem key={item.id} item={item} isActive={currentPage === item.id} navigate={navigate} />
+        ))}
+      </div>
 
-        if (item.special) {
-          return (
-            <button
-              key={item.id}
-              className="nav-create-btn"
-              onClick={() => navigate(item.id)}
-              id={`nav-${item.id}`}
-            >
-              <Icon size={22}/>
-            </button>
-          )
-        }
+      <button
+        className="nav-create-btn"
+        onClick={() => navigate(CREATE_ITEM.id)}
+        id={`nav-${CREATE_ITEM.id}`}
+      >
+        <Plus size={24}/>
+      </button>
 
-        return (
-          <button
-            key={item.id}
-            className={`nav-item-btn ${isActive ? 'nav-active' : ''}`}
-            onClick={() => navigate(item.id)}
-            id={`nav-${item.id}`}
-          >
-            <span className="nav-icon-wrap">
-              <Icon size={22}/>
-              {isActive && <span className="nav-active-dot"/>}
-            </span>
-            <span className="nav-label">{item.label}</span>
-          </button>
-        )
-      })}
+      <div className="nav-group nav-group-right">
+        {RIGHT_ITEMS.map(item => (
+          <NavItem key={item.id} item={item} isActive={currentPage === item.id} navigate={navigate} />
+        ))}
+      </div>
     </nav>
   )
 }
