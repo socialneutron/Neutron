@@ -42,51 +42,6 @@ const SHARE_OPTIONS = [
   { id: 'external', icon: <ExternalLink size={15} />, label: 'Share Externally' },
 ]
 
-const FALLBACK_POSTS = [
-  { id: 'fb-1', title: 'Why AGI safety should be a government priority',
-    body: 'The rapid advancement of LLMs suggests we are closer to AGI than previously thought.',
-    author_id: 'user-1', category: 'Digital Assets', category_color: '#00D2FF',
-    tags: ['AI', 'Safety', 'Governance'], likes_count: 120, comments_count: 45, reposts_count: 12, bookmarks_count: 8,
-    is_liked: false, is_bookmarked: false, is_reposted: false, image_url: '',
-    created_at: new Date(Date.now() - 600000).toISOString(),
-    author: { id: 'user-1', display_name: 'Dr. Elena Vance', username: 'elena_vance', avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80', is_verified: true } },
-  { id: 'fb-2', title: 'The Macro case for Bitcoin in 2026',
-    body: 'With global debt reaching record levels, the thesis for a decentralized store of value has never been stronger.',
-    author_id: 'user-2', category: 'Financial Opportunities', category_color: '#f59e0b',
-    tags: ['Bitcoin', 'Crypto', 'Macro'], likes_count: 340, comments_count: 89, reposts_count: 56, bookmarks_count: 120,
-    is_liked: false, is_bookmarked: false, is_reposted: false, image_url: '',
-    created_at: new Date(Date.now() - 3600000).toISOString(),
-    author: { id: 'user-2', display_name: 'Mark S.', username: 'mark_s', avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80', is_verified: true } },
-  { id: 'fb-3', title: '10 startups to watch in the fusion energy space',
-    body: 'Fusion is no longer "30 years away". These companies are making real breakthroughs.',
-    author_id: 'user-3', category: 'Business Marketplace', category_color: '#7928CA',
-    tags: ['Fusion', 'Energy', 'Startups'], likes_count: 560, comments_count: 120, reposts_count: 87, bookmarks_count: 200,
-    is_liked: false, is_bookmarked: false, is_reposted: false, image_url: '',
-    created_at: new Date(Date.now() - 7200000).toISOString(),
-    author: { id: 'user-3', display_name: 'TechObserver', username: 'tech_observer', avatar_url: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=150&q=80', is_verified: false } },
-  { id: 'fb-4', title: 'CRISPR 3.0: Gene editing enters its precision era',
-    body: 'Base editing and prime editing are moving beyond lab demonstrations into clinical trials.',
-    author_id: 'user-4', category: 'Creative Assets', category_color: '#34D399',
-    tags: ['Biotech', 'CRISPR', 'Medicine'], likes_count: 890, comments_count: 203, reposts_count: 145, bookmarks_count: 310,
-    is_liked: false, is_bookmarked: false, is_reposted: false, image_url: '',
-    created_at: new Date(Date.now() - 10800000).toISOString(),
-    author: { id: 'user-4', display_name: 'Dr. James Okoye', username: 'james_okoye', avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80', is_verified: true } },
-  { id: 'fb-5', title: 'SpaceX Starship: Mars colonization timeline updated',
-    body: 'After the latest successful orbital flight, the first crewed mission is now targeted for 2028.',
-    author_id: 'user-5', category: 'Physical Products', category_color: '#ef4444',
-    tags: ['SpaceX', 'Mars', 'Colonization'], likes_count: 1200, comments_count: 340, reposts_count: 210, bookmarks_count: 540,
-    is_liked: false, is_bookmarked: false, is_reposted: false, image_url: '',
-    created_at: new Date(Date.now() - 14400000).toISOString(),
-    author: { id: 'user-5', display_name: 'Priya Sharma', username: 'priya_sharma', avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80', is_verified: true } },
-  { id: 'fb-6', title: 'DeFi yield farming in 2026: What actually works',
-    body: 'After the bear market cleaned out speculative protocols, the surviving DeFi platforms offer sustainable yields.',
-    author_id: 'user-6', category: 'Financial Opportunities', category_color: '#f59e0b',
-    tags: ['DeFi', 'Yield', 'Finance'], likes_count: 430, comments_count: 78, reposts_count: 34, bookmarks_count: 150,
-    is_liked: false, is_bookmarked: false, is_reposted: false, image_url: '',
-    created_at: new Date(Date.now() - 18000000).toISOString(),
-    author: { id: 'user-6', display_name: 'Aria Takahashi', username: 'aria_t', avatar_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80', is_verified: true } },
-]
-
 interface PostDiscussionPageProps {
   postId: string
   navigate: (page: string, params?: any) => void
@@ -145,9 +100,6 @@ export default function PostDiscussionPage({ postId, navigate }: PostDiscussionP
     setLoading(true)
     try {
       let data = await postService.getById(postId, user?.id)
-      if (!data) {
-        data = FALLBACK_POSTS.find(p => p.id === postId) as PostWithAuthor | undefined
-      }
       if (data) {
         setPost(data)
         setLiked(data.is_liked || false)

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Hash, ArrowLeft, TrendingUp, MessageCircle, Eye } from 'lucide-react';
+import { Hash, ArrowLeft, TrendingUp, MessageCircle, Eye, FileText } from 'lucide-react';
 
 const C = {
   bg: '#05050A', surface: '#090914', card: '#0d0d1a', border: 'rgba(255,255,255,0.06)',
@@ -13,12 +13,6 @@ const MOCK_GRAPHS = [
   { id: 'g2', title: 'Token Usage Over Time', creator: 'Bob', likes: 98, svg: 'M0,50 Q30,45 60,30 T120,25 T160,15' },
   { id: 'g3', title: 'LLM vs Human Eval', creator: 'Carol', likes: 210, svg: 'M0,45 Q25,40 50,20 T100,30 T160,8' },
   { id: 'g4', title: 'Fine-tuning Cost Analysis', creator: 'Dave', likes: 67, svg: 'M0,35 Q40,50 80,25 T160,20' },
-];
-
-const MOCK_POSTS = [
-  { id: 'p1', author: 'Eve', title: 'Why AI will transform everything', body: 'The latest developments in language models suggest we are at an inflection point. Let me break down the key trends...', likes: 56, comments: 12 },
-  { id: 'p2', author: 'Frank', title: 'Practical tips for prompt engineering', body: 'After months of experimentation, I have compiled a list of strategies that consistently improve output quality.', likes: 89, comments: 34 },
-  { id: 'p3', author: 'Grace', title: 'Open source vs closed models', body: 'A deep dive comparing accessibility, performance, and ecosystem of the two approaches.', likes: 43, comments: 8 },
 ];
 
 const MOCK_DISCUSSIONS = [
@@ -47,7 +41,7 @@ export default function TagFeedPage({ tag = 'AI', navigate, user }) {
   const [following, setFollowing] = useState(false);
 
   const tabs = ['Graphs', 'Posts', 'Discussions'];
-  const tabCounts = { Graphs: MOCK_GRAPHS.length, Posts: MOCK_POSTS.length, Discussions: MOCK_DISCUSSIONS.length };
+  const tabCounts = { Graphs: MOCK_GRAPHS.length, Posts: 0, Discussions: MOCK_DISCUSSIONS.length };
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'system-ui, sans-serif' }}>
@@ -76,7 +70,7 @@ export default function TagFeedPage({ tag = 'AI', navigate, user }) {
             <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>#{tag}</h1>
             <div style={{ fontSize: 13, color: C.muted, display: 'flex', gap: 12, marginTop: 2 }}>
               <span>{MOCK_GRAPHS.length} graphs</span>
-              <span>{MOCK_POSTS.length} posts</span>
+              <span>0 posts</span>
             </div>
           </div>
         </div>
@@ -161,28 +155,10 @@ export default function TagFeedPage({ tag = 'AI', navigate, user }) {
           {/* Posts Tab */}
           {activeTab === 'posts' && (
             <motion.div key="posts" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {MOCK_POSTS.map((p, i) => (
-                <motion.div
-                  key={p.id}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.06 }}
-                  whileHover={{ borderColor: C.cyan + '44' }}
-                  onClick={() => navigate('topic', { topic: tag })}
-                  style={{
-                    background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
-                    padding: 16, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 8,
-                  }}
-                >
-                  <div style={{ fontSize: 12, color: C.muted }}>by {p.author}</div>
-                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{p.title}</h3>
-                  <p style={{ margin: 0, fontSize: 13, color: C.muted, lineHeight: 1.5 }}>{p.body}</p>
-                  <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: C.muted }}><TrendingUp size={13} /> {p.likes}</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: C.muted }}><MessageCircle size={13} /> {p.comments}</span>
-                  </div>
-                </motion.div>
-              ))}
+              <div style={{ textAlign: 'center', padding: 40, color: C.muted }}>
+                <FileText size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
+                <p style={{ margin: 0, fontSize: 13 }}>No posts yet for this tag</p>
+              </div>
             </motion.div>
           )}
 

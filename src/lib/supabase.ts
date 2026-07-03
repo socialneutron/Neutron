@@ -69,51 +69,6 @@ const tables: Record<string, any[]> = {
   ],
 }
 
-function seedPosts() {
-  if (tables.posts.length > 0) return
-  const posts = [
-    { id: 'fb-1', title: 'Why AGI safety should be a government priority',
-      body: 'The rapid advancement of LLMs suggests we are closer to AGI than previously thought. We need international protocols for safety, transparency benchmarks, and coordinated research efforts to ensure alignment before capabilities outpace governance.',
-      author_id: 'user-1', category: 'Digital Assets', category_color: '#00D2FF',
-      tags: ['AI', 'Safety', 'Governance'], likes_count: 120, comments_count: 0, reposts_count: 12, bookmarks_count: 8,
-      image_url: '', is_repost: false, repost_of: null,
-      created_at: new Date(Date.now() - 600000).toISOString(), updated_at: new Date().toISOString() },
-    { id: 'fb-2', title: 'The Macro case for Bitcoin in 2026',
-      body: 'With global debt reaching record levels, the thesis for a decentralized store of value has never been stronger. Central banks are pivoting, inflation is sticky, and institutional adoption is accelerating faster than any asset class in history.',
-      author_id: 'user-2', category: 'Financial Opportunities', category_color: '#f59e0b',
-      tags: ['Bitcoin', 'Crypto', 'Macro'], likes_count: 340, comments_count: 0, reposts_count: 56, bookmarks_count: 120,
-      image_url: '', is_repost: false, repost_of: null,
-      created_at: new Date(Date.now() - 3600000).toISOString(), updated_at: new Date().toISOString() },
-    { id: 'fb-3', title: '10 startups to watch in the fusion energy space',
-      body: 'Fusion is no longer "30 years away". These companies are making real breakthroughs in magnetic confinement, laser ignition, and high-temperature superconductors that could reshape the global energy landscape within a decade.',
-      author_id: 'user-3', category: 'Business Marketplace', category_color: '#7928CA',
-      tags: ['Fusion', 'Energy', 'Startups'], likes_count: 560, comments_count: 0, reposts_count: 87, bookmarks_count: 200,
-      image_url: '', is_repost: false, repost_of: null,
-      created_at: new Date(Date.now() - 7200000).toISOString(), updated_at: new Date().toISOString() },
-    { id: 'fb-4', title: 'CRISPR 3.0: Gene editing enters its precision era',
-      body: 'Base editing and prime editing are moving beyond lab demonstrations into clinical trials. The latest generation of CRISPR tools can now target individual nucleotides with near-zero off-target effects, opening the door to curing hundreds of genetic diseases.',
-      author_id: 'user-4', category: 'Creative Assets', category_color: '#34D399',
-      tags: ['Biotech', 'CRISPR', 'Medicine'], likes_count: 890, comments_count: 0, reposts_count: 145, bookmarks_count: 310,
-      image_url: '', is_repost: false, repost_of: null,
-      created_at: new Date(Date.now() - 10800000).toISOString(), updated_at: new Date().toISOString() },
-    { id: 'fb-5', title: 'SpaceX Starship: Mars colonization timeline updated',
-      body: 'After the latest successful orbital flight and precision landing, SpaceX has updated its Mars mission timeline. The first crewed mission is now targeted for 2028, with cargo missions beginning in 2026. The implications for resource extraction and interplanetary commerce are staggering.',
-      author_id: 'user-5', category: 'Physical Products', category_color: '#ef4444',
-      tags: ['SpaceX', 'Mars', 'Colonization'], likes_count: 1200, comments_count: 0, reposts_count: 210, bookmarks_count: 540,
-      image_url: '', is_repost: false, repost_of: null,
-      created_at: new Date(Date.now() - 14400000).toISOString(), updated_at: new Date().toISOString() },
-    { id: 'fb-6', title: 'DeFi yield farming in 2026: What actually works',
-      body: 'After the bear market cleaned out speculative protocols, the surviving DeFi platforms are offering sustainable yields backed by real revenue. Here is a data-driven analysis of the top 5 strategies that are generating consistent returns without excessive risk.',
-      author_id: 'user-6', category: 'Financial Opportunities', category_color: '#f59e0b',
-      tags: ['DeFi', 'Yield', 'Finance'], likes_count: 430, comments_count: 0, reposts_count: 34, bookmarks_count: 150,
-      image_url: '', is_repost: false, repost_of: null,
-      created_at: new Date(Date.now() - 18000000).toISOString(), updated_at: new Date().toISOString() },
-  ]
-  tables.posts.push(...posts)
-}
-
-seedPosts()
-
 type Query = {
   table: string
   selectCols: string[]
