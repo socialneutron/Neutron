@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Image, X, Hash } from 'lucide-react'
 import { useSupabaseAuth } from '../context/SupabaseAuthContext'
+import { useAuth } from '../context/AuthContext'
 import { postService } from '../services'
 import { useFeedStore } from '../stores/feedStore'
 
@@ -22,7 +23,8 @@ const CATEGORIES = [
 ]
 
 export default function PostCreation({ navigate }) {
-  const { user } = useSupabaseAuth()
+  const { user, profile } = useSupabaseAuth()
+  const { user: firebaseUser } = useAuth()
   const { addPost } = useFeedStore()
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
@@ -33,34 +35,85 @@ export default function PostCreation({ navigate }) {
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState('')
 
-  const handlePost = async () => {
-    if (!user || !title.trim()) return
+  const activeUser = firebaseUser || user
+  const uid = activeUser?.id || activeUser?.uid || profile?.id || 'local-user'
+  const displayName = profile?.display_name
+    || activeUser?.user_metadata?.display_name
+    || activeUser?.displayName
+    || activeUser?.username
+    || activeUser?.email?.split('@')[0]
+    || 'User'
+  const username = profile?.username
+    || activeUser?.user_metadata?.username
+    || activeUser?.username
+    || activeUser?.email?.split('@')[0]
+    || 'user'
+  const avatarUrl = profile?.avatar_url
+    || activeUser?.user_metadata?.avatar_url
+    || activeUser?.avatar
+    || activeUser?.photoURL
+    || ''
+
+  const handleSubmit = async () => {
+    if (!title.trim() || posting) return
     setPosting(true)
     setError('')
-    const post = await postService.create(user.id, {
-      title: title.trim(),
-      body: body.trim(),
-      category,
-      category_color: categoryColor,
-      tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-      image_url: imageUrl,
-    })
-    if (post) {
-      const author = {
-        id: user.id,
-        display_name: user.user_metadata?.display_name || user.email?.split('@')[0] || 'User',
-        username: user.user_metadata?.username || user.email?.split('@')[0] || 'user',
-        avatar_url: user.user_metadata?.avatar_url || '',
-        banner_url: '', bio: '', website: '', location: '',
-        is_verified: false, followers_count: 0, following_count: 0,
-        posts_count: 0, created_at: '', updated_at: '',
-      }
-      addPost({ ...post, author, is_liked: false, is_bookmarked: false, is_reposted: false })
-      navigate('home')
-    } else {
-      setError('Failed to create post. Please try again.')
+    const now = new Date().toISOString()
+    const postAuthor = {
+      id: uid,
+      display_name: displayName,
+      username: username,
+      avatar_url: avatarUrl,
+      banner_url: profile?.banner_url || '',
+      bio: profile?.bio || '',
+      website: profile?.website || '',
+      location: profile?.location || '',
+      is_verified: profile?.is_verified || false,
+      followers_count: profile?.followers_count || 0,
+      following_count: profile?.following_count || 0,
+      posts_count: profile?.posts_count || 0,
+      created_at: profile?.created_at || '',
+      updated_at: profile?.updated_at || '',
     }
-    setPosting(false)
+    try {
+      const saved = await postService.create(uid, {
+        title: title.trim(),
+        body: body.trim(),
+        category,
+        category_color: categoryColor,
+        tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+        image_url: imageUrl,
+      })
+      const newPost = {
+        id: saved?.id || `post-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        title: title.trim(),
+        body: body.trim(),
+        category,
+        category_color: categoryColor,
+        tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+        image_url: imageUrl,
+        author_id: uid,
+        author_username: username,
+        author_avatar: avatarUrl,
+        likes_count: saved?.likes_count ?? 0,
+        comments_count: saved?.comments_count ?? 0,
+        reposts_count: saved?.reposts_count ?? 0,
+        bookmarks_count: saved?.bookmarks_count ?? 0,
+        is_repost: false,
+        repost_of: null,
+        is_liked: false,
+        is_bookmarked: false,
+        is_reposted: false,
+        created_at: saved?.created_at || now,
+        updated_at: now,
+        author: postAuthor,
+      }
+      addPost(newPost)
+      navigate('home')
+    } catch {
+      setError('Failed to create post. Please try again.')
+      setPosting(false)
+    }
   }
 
   return (
@@ -70,7 +123,7 @@ export default function PostCreation({ navigate }) {
           <ArrowLeft size={20} />
         </button>
         <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: C.text }}>New Post</h2>
-        <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={handlePost}
+        <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={handleSubmit}
           disabled={!title.trim() || posting}
           style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: title.trim() ? 'linear-gradient(135deg, #2563eb, #7c3aed)' : 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: title.trim() ? 'pointer' : 'not-allowed', opacity: posting ? 0.5 : 1 }}
         >
@@ -80,12 +133,6 @@ export default function PostCreation({ navigate }) {
 
       <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
         {error && <p style={{ color: '#ef4444', fontSize: 13, margin: 0 }}>{error}</p>}
-
-        {!user && (
-          <div style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(0,210,255,0.08)', border: '1px solid rgba(0,210,255,0.2)', fontSize: 13, color: C.cyan }}>
-            Sign in to create posts. Go to <span onClick={() => navigate('login')} style={{ textDecoration: 'underline', cursor: 'pointer' }}>Login</span>.
-          </div>
-        )}
 
         <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title"
           style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.cardBdr}`, borderRadius: 10, padding: '12px 14px', fontSize: 16, fontWeight: 700, color: '#fff', outline: 'none' }} />

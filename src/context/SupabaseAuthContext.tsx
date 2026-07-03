@@ -19,7 +19,11 @@ interface AuthContextType {
 const DEMO_USER: SupabaseUser = {
   id: 'demo-user-id',
   email: 'demo@neutron.app',
-  user_metadata: { username: 'pratham', display_name: 'Pratham', avatar_url: '' },
+  user_metadata: {
+    username: 'pratham',
+    display_name: 'Pratham',
+    avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+  },
   app_metadata: {},
   aud: 'authenticated',
   created_at: new Date().toISOString(),
@@ -29,7 +33,7 @@ const DEMO_PROFILE: User = {
   id: 'demo-user-id',
   username: 'pratham',
   display_name: 'Pratham',
-  avatar_url: '',
+  avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
   banner_url: '',
   bio: 'Building high-performance dark-themed decentralized applications and state architectures.',
   website: '',

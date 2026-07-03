@@ -325,7 +325,7 @@ function createMockClient(): SupabaseClient {
           } else if (cols.includes('!')) {
             const parsed = parseJoinSelect(cols as string)
             if (parsed) {
-              q.selectCols = [parsed.field]
+              if (!q.selectCols.includes('*')) q.selectCols = ['*']
               q.joins.push({ field: parsed.field, refTable: parsed.refTable, refKey: parsed.refKey, localKey: `${parsed.field}_id` })
             } else {
               q.selectCols = (cols as string).split(',').map(s => s.trim())

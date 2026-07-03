@@ -21,7 +21,7 @@ interface PostCardProps {
 }
 
 export default function PostCard({ post, navigate, delay = 0, showFull = false }: PostCardProps) {
-  const { user } = useSupabaseAuth()
+  const { user, profile } = useSupabaseAuth()
   const { updatePost, removePost } = useFeedStore()
   const [liked, setLiked] = useState(post.is_liked || false)
   const [likeCount, setLikeCount] = useState(post.likes_count)
@@ -39,23 +39,25 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
   const handleLike = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (!user) return
-    setLikeAnimating(true)
-    setTimeout(() => setLikeAnimating(false), 400)
     const newLiked = !liked
     const prevLiked = liked
     const prevCount = likeCount
+    setLikeAnimating(true)
+    setTimeout(() => setLikeAnimating(false), 400)
     setLiked(newLiked)
     setLikeCount(c => newLiked ? c + 1 : c - 1)
     try {
       await likeService.toggle(user.id, post.id)
+      const newCount = newLiked ? prevCount + 1 : prevCount - 1
+      updatePost(post.id, { is_liked: newLiked, likes_count: newCount })
       if (newLiked && post.author_id !== user.id) {
         await notificationService.create(post.author_id, user.id, 'like', post.id)
       }
-      updatePost(post.id, { is_liked: newLiked, likes_count: newLiked ? post.likes_count + 1 : post.likes_count - 1 })
     } catch {
-      setLiked(prevLiked); setLikeCount(prevCount)
+      setLiked(prevLiked)
+      setLikeCount(prevCount)
     }
-  }, [user, liked, post, updatePost, likeCount])
+  }, [user, liked, likeCount, post, updatePost])
 
   const handleBookmark = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -78,7 +80,7 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
   }, [user])
 
   const handleRepostSubmit = useCallback(async () => {
-    if (!user || reposting) return
+    if (!user || reposting || reposted) return
     setReposting(true)
     try {
       const newPost = await postService.create(user.id, {
@@ -93,26 +95,33 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
       if (newPost) {
         const authorData = {
           id: user.id,
-          display_name: user.user_metadata?.display_name || user.email?.split('@')[0] || 'User',
-          username: user.user_metadata?.username || user.email?.split('@')[0] || 'user',
-          avatar_url: user.user_metadata?.avatar_url || null,
-          is_verified: false,
+          display_name: profile?.display_name || user.user_metadata?.display_name || user.email?.split('@')[0] || 'User',
+          username: profile?.username || user.user_metadata?.username || user.email?.split('@')[0] || 'user',
+          avatar_url: profile?.avatar_url || user.user_metadata?.avatar_url || '',
+          banner_url: profile?.banner_url || '', bio: profile?.bio || '', website: profile?.website || '', location: profile?.location || '',
+          is_verified: profile?.is_verified || false, followers_count: profile?.followers_count || 0, following_count: profile?.following_count || 0,
+          posts_count: profile?.posts_count || 0, created_at: profile?.created_at || '', updated_at: profile?.updated_at || '',
         }
-        const fullPost: PostWithAuthor = { ...newPost, author: authorData as any, is_liked: false, is_bookmarked: false, is_reposted: false }
+        const fullPost: PostWithAuthor = {
+          ...newPost,
+          author: authorData as any,
+          is_liked: false, is_bookmarked: false, is_reposted: false,
+        }
         useFeedStore.getState().addPost(fullPost)
         await repostService.toggle(user.id, post.id)
+        const newCount = repostCount + 1
+        setReposted(true)
+        setRepostCount(newCount)
+        updatePost(post.id, { is_reposted: true, reposts_count: newCount })
         if (post.author_id !== user.id) {
           await notificationService.create(post.author_id, user.id, 'repost', post.id)
         }
-        updatePost(post.id, { is_reposted: true, reposts_count: post.reposts_count + 1 })
-        setReposted(true)
-        setRepostCount(c => c + 1)
       }
     } catch {}
     setReposting(false)
     setShowRepostModal(false)
     setRepostComment('')
-  }, [user, repostComment, post, updatePost, reposting])
+  }, [user, repostComment, post, updatePost, reposting, reposted, repostCount])
 
   const handleDelete = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -151,18 +160,39 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
           <div
             style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
-            onClick={(e) => { e.stopPropagation(); navigate('profile', { author: { name: post.author?.display_name, handle: `@${post.author?.username}`, avatar: post.author?.avatar_url, verified: post.author?.is_verified } }) }}
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate('profile', {
+                author: {
+                  id: post.author_id,
+                  name: post.author?.display_name,
+                  handle: `@${post.author?.username}`,
+                  avatar: post.author?.avatar_url,
+                  verified: post.author?.is_verified,
+                },
+              })
+            }}
           >
-            <div style={{
-              width: 40, height: 40, borderRadius: 12,
-              background: post.author?.avatar_url
-                ? `url(${post.author.avatar_url}) center/cover`
-                : `linear-gradient(135deg, ${post.category_color}60, #8a2be260)`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 15, fontWeight: 700, color: '#fff', flexShrink: 0,
-            }}>
-              {!post.author?.avatar_url && post.author?.display_name?.[0]?.toUpperCase()}
-            </div>
+            {post.author?.avatar_url ? (
+              <img
+                src={post.author.avatar_url}
+                alt={post.author?.display_name || 'Author'}
+                style={{
+                  width: 40, height: 40, borderRadius: 12,
+                  objectFit: 'cover', flexShrink: 0,
+                }}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+              />
+            ) : (
+              <div style={{
+                width: 40, height: 40, borderRadius: 12,
+                background: `linear-gradient(135deg, ${post.category_color}60, #8a2be260)`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 15, fontWeight: 700, color: '#fff', flexShrink: 0,
+              }}>
+                {post.author?.display_name?.[0]?.toUpperCase() || '?'}
+              </div>
+            )}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{post.author?.display_name}</span>
@@ -288,7 +318,11 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
           authorId={post.author_id}
           onClose={() => setShowComments(false)}
           navigate={navigate}
-          onCommentAdded={() => setCommentCount(c => c + 1)}
+          onCommentAdded={() => {
+            const newCount = commentCount + 1
+            setCommentCount(newCount)
+            updatePost(post.id, { comments_count: newCount })
+          }}
         />
       )}
 

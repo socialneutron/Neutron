@@ -26,7 +26,7 @@ interface CommentNode extends CommentWithAuthor {
 }
 
 export default function CommentsModal({ postId, authorId, onClose, navigate, onCommentAdded }: CommentsModalProps) {
-  const { user } = useSupabaseAuth()
+  const { user, profile } = useSupabaseAuth()
   const [comments, setComments] = useState<CommentNode[]>([])
   const [newComment, setNewComment] = useState('')
   const [loading, setLoading] = useState(true)
@@ -101,9 +101,9 @@ export default function CommentsModal({ postId, authorId, onClose, navigate, onC
         ...(comment as any),
         author: {
           id: user.id,
-          display_name: user.user_metadata?.display_name || user.email?.split('@')[0] || 'User',
-          username: user.user_metadata?.username || user.email?.split('@')[0] || 'user',
-          avatar_url: user.user_metadata?.avatar_url || '',
+          display_name: profile?.display_name || user.user_metadata?.display_name || user.email?.split('@')[0] || 'User',
+          username: profile?.username || user.user_metadata?.username || user.email?.split('@')[0] || 'user',
+          avatar_url: profile?.avatar_url || user.user_metadata?.avatar_url || '',
         } as any,
         replies: [],
         showReplies: false,
@@ -119,7 +119,7 @@ export default function CommentsModal({ postId, authorId, onClose, navigate, onC
       }
     }
     setSending(false)
-  }, [user, newComment, postId, authorId, sending, onCommentAdded])
+  }, [user, profile, newComment, postId, authorId, sending, onCommentAdded])
 
   const handleSendReply = useCallback(async (parentId: string) => {
     if (!user || !replyText.trim() || sendingReply) return
@@ -132,9 +132,9 @@ export default function CommentsModal({ postId, authorId, onClose, navigate, onC
         ...(reply as any),
         author: {
           id: user.id,
-          display_name: user.user_metadata?.display_name || user.email?.split('@')[0] || 'User',
-          username: user.user_metadata?.username || user.email?.split('@')[0] || 'user',
-          avatar_url: user.user_metadata?.avatar_url || '',
+          display_name: profile?.display_name || user.user_metadata?.display_name || user.email?.split('@')[0] || 'User',
+          username: profile?.username || user.user_metadata?.username || user.email?.split('@')[0] || 'user',
+          avatar_url: profile?.avatar_url || user.user_metadata?.avatar_url || '',
         } as any,
         replies: [],
         showReplies: false,
@@ -153,7 +153,7 @@ export default function CommentsModal({ postId, authorId, onClose, navigate, onC
       }
     }
     setSendingReply(false)
-  }, [user, replyText, postId, authorId, sendingReply])
+  }, [user, profile, replyText, postId, authorId, sendingReply])
 
   const handleDelete = useCallback(async (commentId: string, parentId?: string | null) => {
     if (!user) return
