@@ -34,14 +34,21 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
 
   const activeUser = firebaseUser || propUser
   const isViewingOther = !!profileAuthor
-  const resolvedUsername = isViewingOther
-    ? (profileAuthor.handle?.replace('@', '') || profileAuthor.name?.toLowerCase()?.replace(/\s/g, ''))
-    : (supaUser?.user_metadata?.username || activeUser?.username || 'pratham')
-
-  const isOwnProfile = !isViewingOther
 
   const currentUser = supaUser || activeUser
-  const isSelf = isViewingOther && currentUser && profile && currentUser.id === profile.id
+  const currentUsername = currentUser?.user_metadata?.username
+    || currentUser?.username
+    || currentUser?.displayName
+    || ''
+
+  const isOwnProfile = !isViewingOther
+  const isSelf = isViewingOther
+    && currentUsername
+    && (currentUsername === profile?.username || currentUsername === profileAuthor?.handle?.replace('@', ''))
+
+  const resolvedUsername = isViewingOther
+    ? (profileAuthor.handle?.replace('@', '') || profileAuthor.name?.toLowerCase()?.replace(/\s/g, ''))
+    : currentUsername || 'pratham'
 
   // Load profile from Supabase
   useEffect(() => {
@@ -55,8 +62,9 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
             : await userService.getProfile(resolvedUsername)
           if (!cancelled && profileData) {
             setProfile(profileData)
-            if (supaUser) {
-              const following = await followService.isFollowing(supaUser.id, profileData.id)
+            const followerId = currentUser?.id || currentUser?.uid
+            if (followerId) {
+              const following = await followService.isFollowing(followerId, profileData.id)
               if (!cancelled) setIsFollowing(following)
             }
             const posts = await userService.getUserPosts(profileData.id)
@@ -65,8 +73,8 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
             const followers = await followService.getFollowers(profileData.id)
             const followingList = await followService.getFollowing(profileData.id)
             if (!cancelled) {
-              setFollowersCount(followers.length)
-              setFollowingCount(followingList.length)
+              setFollowersCount(followers.length || profileData.followers_count || 0)
+              setFollowingCount(followingList.length || profileData.following_count || 0)
             }
           }
         } catch {
@@ -81,8 +89,8 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
           const followers = await followService.getFollowers(supaProfile.id)
           const followingList = await followService.getFollowing(supaProfile.id)
           if (!cancelled) {
-            setFollowersCount(followers.length)
-            setFollowingCount(followingList.length)
+            setFollowersCount(followers.length || supaProfile.followers_count || 0)
+            setFollowingCount(followingList.length || supaProfile.following_count || 0)
           }
         } catch {
           if (!cancelled) setUserPosts([])
@@ -92,14 +100,14 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
     }
     load()
     return () => { cancelled = true }
-  }, [resolvedUsername, isViewingOther, supaUser, supaProfile, setProfile, setIsFollowing, profileAuthor?.id])
+  }, [resolvedUsername, isViewingOther, currentUser, supaProfile, setProfile, setIsFollowing, profileAuthor?.id])
 
   const handleFollow = useCallback(async () => {
-    const followerId = supaUser?.id || activeUser?.uid
-    if (!followerId || !profile || isSelf) return
+    const followerId = currentUser?.id || currentUser?.uid
+    if (!followerId || !profile) return
     const nowFollowing = await toggleFollow(followerId, profile.id)
     setFollowersCount(prev => nowFollowing ? prev + 1 : prev - 1)
-  }, [supaUser, activeUser, profile, toggleFollow, isSelf])
+  }, [currentUser, profile, toggleFollow])
 
   const displayName = isOwnProfile
     ? (globalDisplayName || profile?.display_name || activeUser?.username || 'Pratham')
@@ -180,54 +188,51 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
             ))}
           </div>
 
-          {/* Action buttons */}
-          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-            {isOwnProfile ? (
+          {/* Action buttons — hidden entirely on own profile or when viewing self via different route */}
+          {!isOwnProfile && !isSelf && (
+            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={handleFollow}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: '10px', cursor: 'pointer',
+                  background: isFollowing ? 'rgba(0,210,255,0.15)' : 'rgba(5,5,10,0.4)',
+                  border: isFollowing ? '1px solid rgba(0,210,255,0.3)' : '1px solid rgba(0,210,255,0.3)',
+                  color: isFollowing ? C.cyan : '#e5e7eb', fontSize: 14, fontWeight: 700, transition: 'all 0.2s',
+                }}
+              >
+                {isFollowing ? '✓ Following' : '+ Follow'}
+              </motion.button>
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                onClick={() => {
+                  const peer = {
+                    id: profileAuthor?.handle || profile?.username || displayName,
+                    username: displayName,
+                    avatar: profileAuthor?.avatar || avatar,
+                    online: true, isVerified: profileAuthor?.verified || false,
+                  }
+                  getOrCreateConversation(peer)
+                  setChatMessages([])
+                  setShowChat(true)
+                }}
+                style={{ flex: 1, padding: 12, borderRadius: 10, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, #2563eb, #7c3aed)', color: '#fff', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+              >
+                <MessageSquare size={15} /> Message
+              </motion.button>
+            </div>
+          )}
+          {isOwnProfile && (
+            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
               <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
                 onClick={() => navigate('settings')}
                 style={{ flex: 1, padding: 12, borderRadius: 10, border: `1px solid ${C.cardBdr}`, cursor: 'pointer', background: 'rgba(255,255,255,0.04)', color: '#e5e7eb', fontSize: 14, fontWeight: 700, transition: 'all 0.2s' }}
               >
                 <Settings size={15} style={{ marginRight: 6, verticalAlign: 'middle' }} /> Edit Profile
               </motion.button>
-            ) : (
-              <>
-                {!isSelf && (
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={handleFollow}
-                    style={{
-                      flex: 1, padding: '12px', borderRadius: '10px', cursor: 'pointer',
-                      background: isFollowing ? 'rgba(0,210,255,0.15)' : 'rgba(5,5,10,0.4)',
-                      border: isFollowing ? '1px solid rgba(0,210,255,0.3)' : '1px solid rgba(0,210,255,0.3)',
-                      color: isFollowing ? C.cyan : '#e5e7eb', fontSize: 14, fontWeight: 700, transition: 'all 0.2s',
-                    }}
-                  >
-                    {isFollowing ? '✓ Following' : '+ Follow'}
-                  </motion.button>
-                )}
-                {!isSelf && (
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
-                    onClick={() => {
-                      const peer = {
-                        id: profileAuthor?.handle || profile?.username || displayName,
-                        username: displayName,
-                        avatar: profileAuthor?.avatar || avatar,
-                        online: true, isVerified: profileAuthor?.verified || false,
-                      }
-                      getOrCreateConversation(peer)
-                      setChatMessages([])
-                      setShowChat(true)
-                    }}
-                    style={{ flex: 1, padding: 12, borderRadius: 10, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, #2563eb, #7c3aed)', color: '#fff', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                  >
-                    <MessageSquare size={15} /> Message
-                  </motion.button>
-                )}
-              </>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Posts Feed (no tab row needed — single tab) */}
+      {/* Posts Feed */}
       <div style={{ borderTop: '1px solid rgba(0,210,255,0.08)' }}>
         {userPosts.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 60, color: C.muted }}>
