@@ -24,7 +24,7 @@ const tables: Record<string, any[]> = {
       id: 'demo-user-id',
       username: 'pratham',
       display_name: 'Pratham',
-      avatar_url: '',
+      avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
       banner_url: '',
       bio: 'Building high-performance dark-themed decentralized applications and state architectures.',
       website: '',
@@ -113,7 +113,7 @@ function resolveJoins(rows: any[], joins: Query['joins']): any[] {
       }
       const refTable = tables[j.refTable]
       if (!refTable) { result[j.field] = null; continue }
-      const refRow = refTable.find(r => r[j.refKey] === refValue)
+      const refRow = refTable.find(r => r.id === refValue)
       result[j.field] = refRow || null
     }
     return result

@@ -38,6 +38,8 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
   const [repostComment, setRepostComment] = useState('')
   const [reposting, setReposting] = useState(false)
 
+  const [showAvatarImg, setShowAvatarImg] = useState(true)
+
   const handleLike = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (!user) return
@@ -177,7 +179,7 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
               })
             }}
           >
-            {post.author?.avatar_url ? (
+            {post.author?.avatar_url && showAvatarImg ? (
               <img
                 src={post.author.avatar_url}
                 alt={post.author?.display_name || 'Author'}
@@ -185,7 +187,7 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
                   width: 40, height: 40, borderRadius: 12,
                   objectFit: 'cover', flexShrink: 0,
                 }}
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                onError={() => setShowAvatarImg(false)}
               />
             ) : (
               <div style={{
