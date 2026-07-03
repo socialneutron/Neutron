@@ -203,22 +203,24 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
                     {isFollowing ? '✓ Following' : '+ Follow'}
                   </motion.button>
                 )}
-                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
-                  onClick={() => {
-                    const peer = {
-                      id: profileAuthor?.handle || profile?.username || displayName,
-                      username: displayName,
-                      avatar: profileAuthor?.avatar || avatar,
-                      online: true, isVerified: profileAuthor?.verified || false,
-                    }
-                    getOrCreateConversation(peer)
-                    setChatMessages([])
-                    setShowChat(true)
-                  }}
-                  style={{ flex: 1, padding: 12, borderRadius: 10, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, #2563eb, #7c3aed)', color: '#fff', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                >
-                  <MessageSquare size={15} /> Message
-                </motion.button>
+                {!isSelf && (
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                    onClick={() => {
+                      const peer = {
+                        id: profileAuthor?.handle || profile?.username || displayName,
+                        username: displayName,
+                        avatar: profileAuthor?.avatar || avatar,
+                        online: true, isVerified: profileAuthor?.verified || false,
+                      }
+                      getOrCreateConversation(peer)
+                      setChatMessages([])
+                      setShowChat(true)
+                    }}
+                    style={{ flex: 1, padding: 12, borderRadius: 10, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, #2563eb, #7c3aed)', color: '#fff', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  >
+                    <MessageSquare size={15} /> Message
+                  </motion.button>
+                )}
               </>
             )}
           </div>

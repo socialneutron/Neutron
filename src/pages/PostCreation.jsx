@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Image, X, Hash } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { useSupabaseAuth } from '../context/SupabaseAuthContext'
 import { useAuth } from '../context/AuthContext'
 import { postService } from '../services'
@@ -109,7 +109,7 @@ export default function PostCreation({ navigate }) {
         author: postAuthor,
       }
       addPost(newPost)
-      navigate('home')
+      navigate('profile')
     } catch {
       setError('Failed to create post. Please try again.')
       setPosting(false)
