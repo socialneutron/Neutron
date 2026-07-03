@@ -32,6 +32,8 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
   const [showComments, setShowComments] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [likeAnimating, setLikeAnimating] = useState(false)
+  const [repostAnimating, setRepostAnimating] = useState(false)
+  const [commentAnimating, setCommentAnimating] = useState(false)
   const [showRepostModal, setShowRepostModal] = useState(false)
   const [repostComment, setRepostComment] = useState('')
   const [reposting, setReposting] = useState(false)
@@ -43,7 +45,7 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
     const prevLiked = liked
     const prevCount = likeCount
     setLikeAnimating(true)
-    setTimeout(() => setLikeAnimating(false), 400)
+    setTimeout(() => setLikeAnimating(false), 600)
     setLiked(newLiked)
     setLikeCount(c => newLiked ? c + 1 : c - 1)
     try {
@@ -112,6 +114,8 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
         const newCount = repostCount + 1
         setReposted(true)
         setRepostCount(newCount)
+        setRepostAnimating(true)
+        setTimeout(() => setRepostAnimating(false), 600)
         updatePost(post.id, { is_reposted: true, reposts_count: newCount })
         if (post.author_id !== user.id) {
           await notificationService.create(post.author_id, user.id, 'repost', post.id)
@@ -121,7 +125,7 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
     setReposting(false)
     setShowRepostModal(false)
     setRepostComment('')
-  }, [user, repostComment, post, updatePost, reposting, reposted, repostCount])
+  }, [user, repostComment, post, updatePost, reposting, reposted, repostCount, profile])
 
   const handleDelete = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -242,28 +246,74 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
         {/* Action Bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderTop: `1px solid ${C.border}`, paddingTop: 10, marginTop: 4 }}>
           {/* LIKE */}
-          <motion.button
-            whileTap={{ scale: 0.85 }}
-            animate={likeAnimating ? { scale: [1, 1.35, 1] } : {}}
-            transition={{ duration: 0.35 }}
-            onClick={handleLike}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
-              borderRadius: 8, border: 'none', background: 'transparent',
-              color: liked ? '#f87171' : C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              transition: 'color 0.2s, background 0.2s',
-            }}
-            onMouseEnter={e => { if (!liked) e.currentTarget.style.background = 'rgba(248,113,113,0.08)' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-          >
-            <Heart size={16} fill={liked ? 'currentColor' : 'none'} strokeWidth={liked ? 0 : 2} />
-            <span>{formatNum(likeCount)}</span>
-          </motion.button>
+          <div style={{ position: 'relative' }}>
+            <motion.button
+              whileTap={{ scale: 0.7 }}
+              onClick={handleLike}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
+                borderRadius: 8, border: 'none', background: 'transparent',
+                color: liked ? '#f87171' : C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                transition: 'color 0.2s, background 0.2s',
+              }}
+              onMouseEnter={e => { if (!liked) e.currentTarget.style.background = 'rgba(248,113,113,0.08)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+            >
+              <motion.div
+                animate={likeAnimating ? { scale: [1, 1.6, 0.9, 1.15, 1], rotate: [0, -15, 15, -5, 0] } : {}}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+                style={{ display: 'flex', alignItems: 'center' }}
+              >
+                <Heart size={16} fill={liked ? 'currentColor' : 'none'} strokeWidth={liked ? 0 : 2} />
+              </motion.div>
+              <AnimatePresence mode="popLayout">
+                <motion.span
+                  key={likeCount}
+                  initial={{ y: liked ? 10 : -10, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: liked ? -10 : 10, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {formatNum(likeCount)}
+                </motion.span>
+              </AnimatePresence>
+            </motion.button>
+            {/* Like burst particles */}
+            <AnimatePresence>
+              {likeAnimating && liked && (
+                <>
+                  {[...Array(6)].map((_, i) => (
+                    <motion.div
+                      key={`like-particle-${i}`}
+                      initial={{ scale: 0, x: 0, y: 0, opacity: 1 }}
+                      animate={{
+                        scale: [0, 1, 0],
+                        x: Math.cos((i * 60) * Math.PI / 180) * 22,
+                        y: Math.sin((i * 60) * Math.PI / 180) * 22 - 8,
+                        opacity: [1, 1, 0],
+                      }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.5, delay: i * 0.03, ease: 'easeOut' }}
+                      style={{
+                        position: 'absolute', top: '50%', left: 14, width: 4, height: 4,
+                        borderRadius: '50%', background: '#f87171', pointerEvents: 'none',
+                      }}
+                    />
+                  ))}
+                </>
+              )}
+            </AnimatePresence>
+          </div>
 
           {/* COMMENT */}
           <motion.button
             whileTap={{ scale: 0.85 }}
-            onClick={(e) => { e.stopPropagation(); setShowComments(true) }}
+            onClick={(e) => {
+              e.stopPropagation()
+              setCommentAnimating(true)
+              setTimeout(() => setCommentAnimating(false), 400)
+              setShowComments(true)
+            }}
             style={{
               display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
               borderRadius: 8, border: 'none', background: 'transparent',
@@ -273,30 +323,65 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,210,255,0.06)'; e.currentTarget.style.color = C.cyan }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted }}
           >
-            <MessageCircle size={16} /> {formatNum(commentCount)}
+            <motion.div
+              animate={commentAnimating ? { scale: [1, 1.3, 1], rotate: [0, -10, 10, 0] } : {}}
+              transition={{ duration: 0.4 }}
+              style={{ display: 'flex', alignItems: 'center' }}
+            >
+              <MessageCircle size={16} />
+            </motion.div>
+            <AnimatePresence mode="popLayout">
+              <motion.span
+                key={commentCount}
+                initial={{ scale: 1.3, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.25 }}
+              >
+                {formatNum(commentCount)}
+              </motion.span>
+            </AnimatePresence>
           </motion.button>
 
           {/* REPOST */}
-          <motion.button
-            whileTap={{ scale: 0.85 }}
-            onClick={handleRepost}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
-              borderRadius: 8, border: 'none', background: 'transparent',
-              color: reposted ? C.green : C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              transition: 'color 0.2s, background 0.2s',
-            }}
-            onMouseEnter={e => { if (!reposted) e.currentTarget.style.background = 'rgba(52,211,153,0.06)' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-          >
-            <Repeat2 size={16} /> {formatNum(repostCount)}
-          </motion.button>
+          <div style={{ position: 'relative' }}>
+            <motion.button
+              whileTap={{ scale: 0.7 }}
+              onClick={handleRepost}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
+                borderRadius: 8, border: 'none', background: 'transparent',
+                color: reposted ? C.green : C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                transition: 'color 0.2s, background 0.2s',
+              }}
+              onMouseEnter={e => { if (!reposted) e.currentTarget.style.background = 'rgba(52,211,153,0.06)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+            >
+              <motion.div
+                animate={repostAnimating ? { rotate: [0, -360] } : {}}
+                transition={{ duration: 0.5, ease: 'easeInOut' }}
+                style={{ display: 'flex', alignItems: 'center' }}
+              >
+                <Repeat2 size={16} />
+              </motion.div>
+              <AnimatePresence mode="popLayout">
+                <motion.span
+                  key={repostCount}
+                  initial={{ y: reposted ? 10 : -10, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: reposted ? -10 : 10, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {formatNum(repostCount)}
+                </motion.span>
+              </AnimatePresence>
+            </motion.button>
+          </div>
 
           <div style={{ flex: 1 }} />
 
           {/* BOOKMARK */}
           <motion.button
-            whileTap={{ scale: 0.85 }}
+            whileTap={{ scale: 0.7 }}
             onClick={handleBookmark}
             style={{
               display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
@@ -307,7 +392,13 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
             onMouseEnter={e => { if (!bookmarked) e.currentTarget.style.background = 'rgba(0,210,255,0.06)' }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
           >
-            <Bookmark size={16} fill={bookmarked ? 'currentColor' : 'none'} />
+            <motion.div
+              animate={bookmarked ? { scale: [1, 1.4, 1], y: [0, -3, 0] } : {}}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+              style={{ display: 'flex', alignItems: 'center' }}
+            >
+              <Bookmark size={16} fill={bookmarked ? 'currentColor' : 'none'} />
+            </motion.div>
           </motion.button>
         </div>
       </motion.div>
@@ -321,6 +412,8 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
           onCommentAdded={() => {
             const newCount = commentCount + 1
             setCommentCount(newCount)
+            setCommentAnimating(true)
+            setTimeout(() => setCommentAnimating(false), 400)
             updatePost(post.id, { comments_count: newCount })
           }}
         />

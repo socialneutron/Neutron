@@ -35,6 +35,7 @@ export default function CommentsModal({ postId, authorId, onClose, navigate, onC
   const [replyText, setReplyText] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
   const [newCommentIds, setNewCommentIds] = useState<Set<string>>(new Set())
+  const [likeAnimating, setLikeAnimating] = useState<Set<string>>(new Set())
   const replyInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -169,6 +170,8 @@ export default function CommentsModal({ postId, authorId, onClose, navigate, onC
 
   const handleLikeComment = useCallback(async (commentId: string, parentId?: string | null) => {
     if (!user) return
+    setLikeAnimating(prev => new Set(prev).add(commentId))
+    setTimeout(() => setLikeAnimating(prev => { const next = new Set(prev); next.delete(commentId); return next }), 500)
     const nowLiked = await likeService.toggleComment(user.id, commentId, postId)
     if (parentId) {
       setComments(prev => prev.map(c =>
@@ -356,13 +359,32 @@ function CommentNodeComponent({
 
           {/* Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
-            <button onClick={() => handleLikeComment(comment.id, depth > 0 ? comment.id : undefined)}
+            <motion.button
+              whileTap={{ scale: 0.7 }}
+              onClick={() => handleLikeComment(comment.id, depth > 0 ? comment.id : undefined)}
               style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: comment.is_liked ? '#f87171' : C.muted, fontSize: 11, cursor: 'pointer', padding: '2px 6px', borderRadius: 6, transition: 'color 0.2s, background 0.2s' }}
               onMouseEnter={e => { if (!comment.is_liked) e.currentTarget.style.background = 'rgba(248,113,113,0.06)' }}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}
             >
-              <Heart size={12} fill={comment.is_liked ? 'currentColor' : 'none'} /> {comment.likes_count > 0 ? comment.likes_count : ''}
-            </button>
+              <motion.div
+                animate={likeAnimating.has(comment.id) ? { scale: [1, 1.5, 0.9, 1.1, 1], rotate: [0, -12, 12, -4, 0] } : {}}
+                transition={{ duration: 0.45, ease: 'easeOut' }}
+                style={{ display: 'flex', alignItems: 'center' }}
+              >
+                <Heart size={12} fill={comment.is_liked ? 'currentColor' : 'none'} />
+              </motion.div>
+              <AnimatePresence mode="popLayout">
+                <motion.span
+                  key={comment.likes_count}
+                  initial={{ y: comment.is_liked ? 6 : -6, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: comment.is_liked ? -6 : 6, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {comment.likes_count > 0 ? comment.likes_count : ''}
+                </motion.span>
+              </AnimatePresence>
+            </motion.button>
 
             <button onClick={() => setReplyTo(replyTo === comment.id ? null : comment.id)}
               style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: replyTo === comment.id ? C.cyan : C.muted, fontSize: 11, cursor: 'pointer', padding: '2px 6px', borderRadius: 6, transition: 'color 0.2s, background 0.2s' }}

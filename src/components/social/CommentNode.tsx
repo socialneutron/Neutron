@@ -41,6 +41,7 @@ export default function CommentNode({
   const { user } = useSupabaseAuth()
   const [liked, setLiked] = useState(comment.is_liked || false)
   const [likeCount, setLikeCount] = useState(comment.likes_count)
+  const [likeAnimating, setLikeAnimating] = useState(false)
   const [showReplyInput, setShowReplyInput] = useState(false)
   const [replyText, setReplyText] = useState('')
   const [sending, setSending] = useState(false)
@@ -52,6 +53,8 @@ export default function CommentNode({
 
   const handleLike = useCallback(async () => {
     if (!user) return
+    setLikeAnimating(true)
+    setTimeout(() => setLikeAnimating(false), 500)
     const newLiked = !liked
     setLiked(newLiked)
     setLikeCount(c => newLiked ? c + 1 : c - 1)
@@ -207,7 +210,13 @@ export default function CommentNode({
               onMouseEnter={e => { if (!liked) e.currentTarget.style.background = 'rgba(248,113,113,0.06)' }}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}
             >
-              <Heart size={13} fill={liked ? 'currentColor' : 'none'} strokeWidth={liked ? 0 : 2} />
+              <motion.div
+                animate={likeAnimating ? { scale: [1, 1.5, 0.9, 1.1, 1], rotate: [0, -12, 12, -4, 0] } : {}}
+                transition={{ duration: 0.45, ease: 'easeOut' }}
+                style={{ display: 'flex', alignItems: 'center' }}
+              >
+                <Heart size={13} fill={liked ? 'currentColor' : 'none'} strokeWidth={liked ? 0 : 2} />
+              </motion.div>
               {likeCount > 0 && <span>{likeCount}</span>}
             </motion.button>
 
