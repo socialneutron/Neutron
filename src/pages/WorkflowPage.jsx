@@ -1168,37 +1168,6 @@ export default function WorkflowPage({ navigate }) {
             </div>
           )}
 
-          {/* Floating ROI dashboard — live-updating */}
-          {(totalCost > 0 || totalHours > 0) && (
-            <div style={{
-              position: 'absolute', top: 12, right: 12, zIndex: 10,
-              display: 'flex', alignItems: 'center', gap: 12,
-              padding: '8px 14px', borderRadius: 10,
-              background: `${C.card}dd`, backdropFilter: 'blur(12px)',
-              border: `1px solid ${C.cardBdr}`,
-              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-              pointerEvents: 'auto',
-            }}>
-              <span style={{ fontSize: 8, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                ROI
-              </span>
-              <div style={{ width: 1, height: 18, background: C.cardBdr }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <DollarSign size={12} color={C.green} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>
-                  ${totalCost.toLocaleString()}
-                </span>
-              </div>
-              <div style={{ width: 1, height: 16, background: C.cardBdr }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Clock size={12} color={C.cyan} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>
-                  {formatHours(totalHours)}
-                </span>
-              </div>
-            </div>
-          )}
-
           {/* Empty state */}
           {tags.length === 0 && (
             <div style={{
