@@ -257,6 +257,8 @@ export default function WorkflowPage({ navigate }) {
         const textLen = updated.text.length
         const charWidth = updated.shape === 'diamond' ? 9 : 7.5
         updated.width = Math.max(cfg.width, Math.min(340, Math.ceil(textLen * charWidth) + 40))
+        const lines = updated.text.split('\n').length
+        updated.height = Math.max(cfg.height, 40 + lines * 18)
         return updated
       }))
     }
@@ -1036,20 +1038,48 @@ export default function WorkflowPage({ navigate }) {
                       padding: cfg.contentPad || '0 8px',
                     }}>
                       {isEditing ? (
-                        <input
+                        <textarea
                           autoFocus
+                          ref={el => {
+                            if (el) {
+                              el.style.height = 'auto'
+                              el.style.height = el.scrollHeight + 'px'
+                              el.style.width = 'auto'
+                              el.style.width = Math.max(160, el.scrollWidth + 20) + 'px'
+                            }
+                          }}
                           value={editText}
-                          onChange={e => setEditText(e.target.value)}
+                          onChange={e => {
+                            setEditText(e.target.value)
+                            e.target.style.height = 'auto'
+                            e.target.style.height = e.target.scrollHeight + 'px'
+                            e.target.style.width = 'auto'
+                            e.target.style.width = Math.max(160, e.target.scrollWidth + 20) + 'px'
+                            const cfg2 = SHAPES[tag.shape] || SHAPES.rectangle
+                            const textLen = e.target.value.length
+                            const charWidth = tag.shape === 'diamond' ? 9 : 7.5
+                            const newW = Math.max(cfg2.width, Math.min(340, Math.ceil(textLen * charWidth) + 40))
+                            const lines = e.target.value.split('\n').length
+                            const lineH = 18
+                            const newH = Math.max(cfg2.height, 40 + lines * lineH)
+                            if (tagRefs.current[tag.id]) {
+                              tagRefs.current[tag.id].style.width = newW + 'px'
+                              tagRefs.current[tag.id].style.height = newH + 'px'
+                            }
+                          }}
                           onBlur={saveEdit}
-                          onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') { setEditing(null); setEditText('') } }}
+                          onKeyDown={e => { if (e.key === 'Escape') { setEditing(null); setEditText('') } }}
                           onClick={e => e.stopPropagation()}
                           onMouseDown={e => e.stopPropagation()}
                           style={{
-                            width: '100%', background: 'rgba(0,0,0,0.4)',
-                            border: `1px solid ${C.cyan}50`, borderRadius: 4,
-                            padding: '4px 8px', textAlign: 'center',
+                            minHeight: 36, maxHeight: 180, overflowY: 'auto',
+                            background: 'rgba(0,0,0,0.5)',
+                            border: `1px solid ${C.cyan}50`, borderRadius: 6,
+                            padding: '6px 8px', textAlign: 'left',
                             color: '#fff', fontSize: 11, fontWeight: 600,
                             outline: 'none', fontFamily: 'inherit',
+                            lineHeight: 1.4, resize: 'none',
+                            boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
                           }}
                         />
                       ) : (
