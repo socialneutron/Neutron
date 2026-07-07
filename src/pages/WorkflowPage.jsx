@@ -120,10 +120,14 @@ function formatHours(h) {
 
 function getShapeConfig(tag) {
   const cfg = SHAPES[tag.shape] || SHAPES.rectangle
+  const minWidth = cfg.width
+  const textLen = (tag.text || '').length
+  const charWidth = tag.shape === 'diamond' ? 9 : 7.5
+  const dynamicWidth = Math.max(minWidth, Math.min(340, Math.ceil(textLen * charWidth) + 40))
   return {
     ...cfg,
-    width: tag.width || cfg.width,
-    height: tag.height || cfg.height,
+    width: tag.width || dynamicWidth,
+    height: cfg.height,
   }
 }
 
@@ -246,7 +250,15 @@ export default function WorkflowPage({ navigate }) {
 
   const saveEdit = useCallback(() => {
     if (editing && editText.trim()) {
-      setTags(prev => prev.map(t => t.id === editing ? { ...t, text: editText.trim() } : t))
+      setTags(prev => prev.map(t => {
+        if (t.id !== editing) return t
+        const updated = { ...t, text: editText.trim() }
+        const cfg = SHAPES[updated.shape] || SHAPES.rectangle
+        const textLen = updated.text.length
+        const charWidth = updated.shape === 'diamond' ? 9 : 7.5
+        updated.width = Math.max(cfg.width, Math.min(340, Math.ceil(textLen * charWidth) + 40))
+        return updated
+      }))
     }
     setEditing(null)
     setEditText('')
