@@ -120,14 +120,15 @@ function formatHours(h) {
 
 function getShapeConfig(tag) {
   const cfg = SHAPES[tag.shape] || SHAPES.rectangle
-  const minWidth = cfg.width
   const textLen = (tag.text || '').length
   const charWidth = tag.shape === 'diamond' ? 9 : 7.5
-  const dynamicWidth = Math.max(minWidth, Math.min(340, Math.ceil(textLen * charWidth) + 40))
+  const dynamicWidth = Math.max(cfg.width, Math.min(360, Math.ceil(textLen * charWidth) + 50))
+  const lines = (tag.text || '').split('\n').length
+  const dynamicHeight = Math.max(cfg.height, 44 + lines * 16)
   return {
     ...cfg,
-    width: tag.width || dynamicWidth,
-    height: cfg.height,
+    width: dynamicWidth,
+    height: dynamicHeight,
   }
 }
 
@@ -250,17 +251,7 @@ export default function WorkflowPage({ navigate }) {
 
   const saveEdit = useCallback(() => {
     if (editing && editText.trim()) {
-      setTags(prev => prev.map(t => {
-        if (t.id !== editing) return t
-        const updated = { ...t, text: editText.trim() }
-        const cfg = SHAPES[updated.shape] || SHAPES.rectangle
-        const textLen = updated.text.length
-        const charWidth = updated.shape === 'diamond' ? 9 : 7.5
-        updated.width = Math.max(cfg.width, Math.min(340, Math.ceil(textLen * charWidth) + 40))
-        const lines = updated.text.split('\n').length
-        updated.height = Math.max(cfg.height, 40 + lines * 18)
-        return updated
-      }))
+      setTags(prev => prev.map(t => t.id === editing ? { ...t, text: editText.trim() } : t))
     }
     setEditing(null)
     setEditText('')
@@ -763,13 +754,7 @@ export default function WorkflowPage({ navigate }) {
                         setEditing(selectedTagData.id)
                         e.target.style.height = 'auto'
                         e.target.style.height = e.target.scrollHeight + 'px'
-                        const cfg2 = SHAPES[selectedTagData.shape] || SHAPES.rectangle
-                        const textLen = e.target.value.length
-                        const charWidth = selectedTagData.shape === 'diamond' ? 9 : 7.5
-                        const newW = Math.max(cfg2.width, Math.min(340, Math.ceil(textLen * charWidth) + 40))
-                        const lines = e.target.value.split('\n').length
-                        const newH = Math.max(cfg2.height, 40 + lines * 18)
-                        setTags(prev => prev.map(t => t.id === selectedTagData.id ? { ...t, text: e.target.value, width: newW, height: newH } : t))
+                        setTags(prev => prev.map(t => t.id === selectedTagData.id ? { ...t, text: e.target.value } : t))
                       }}
                       onBlur={saveEdit}
                       onKeyDown={e => { if (e.key === 'Escape') { setEditing(null); setEditText('') } }}
