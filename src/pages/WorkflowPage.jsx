@@ -479,7 +479,13 @@ export default function WorkflowPage({ navigate }) {
   const handleTagClick = useCallback((e, tagId) => {
     e.stopPropagation()
     setSelectedTag(tagId)
-  }, [])
+    setSelectedConnection(null)
+    const tag = tags.find(t => t.id === tagId)
+    if (tag) {
+      setEditing(tagId)
+      setEditText(tag.text)
+    }
+  }, [tags])
 
   const handleTagDoubleClick = useCallback((e, tagId) => {
     e.stopPropagation()
@@ -741,10 +747,45 @@ export default function WorkflowPage({ navigate }) {
                     background: 'rgba(255,255,255,0.03)', borderRadius: 8,
                     padding: 10, border: `1px solid ${C.cardBdr}`,
                   }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 4 }}>
-                      {selectedTagData.text}
-                    </div>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>
+                    {/* Notepad textarea */}
+                    <textarea
+                      autoFocus
+                      ref={el => {
+                        if (el && editing !== selectedTagData.id) {
+                          el.value = selectedTagData.text || ''
+                          el.style.height = 'auto'
+                          el.style.height = el.scrollHeight + 'px'
+                        }
+                      }}
+                      value={editing === selectedTagData.id ? editText : selectedTagData.text}
+                      onChange={e => {
+                        setEditText(e.target.value)
+                        setEditing(selectedTagData.id)
+                        e.target.style.height = 'auto'
+                        e.target.style.height = e.target.scrollHeight + 'px'
+                        const cfg2 = SHAPES[selectedTagData.shape] || SHAPES.rectangle
+                        const textLen = e.target.value.length
+                        const charWidth = selectedTagData.shape === 'diamond' ? 9 : 7.5
+                        const newW = Math.max(cfg2.width, Math.min(340, Math.ceil(textLen * charWidth) + 40))
+                        const lines = e.target.value.split('\n').length
+                        const newH = Math.max(cfg2.height, 40 + lines * 18)
+                        setTags(prev => prev.map(t => t.id === selectedTagData.id ? { ...t, text: e.target.value, width: newW, height: newH } : t))
+                      }}
+                      onBlur={saveEdit}
+                      onKeyDown={e => { if (e.key === 'Escape') { setEditing(null); setEditText('') } }}
+                      placeholder="Type node text..."
+                      style={{
+                        width: '100%', minHeight: 60, maxHeight: 200, overflowY: 'auto',
+                        background: 'rgba(0,0,0,0.4)',
+                        border: `1px solid ${C.cyan}40`, borderRadius: 6,
+                        padding: '8px 10px', textAlign: 'left',
+                        color: '#fff', fontSize: 11, fontWeight: 600,
+                        outline: 'none', fontFamily: 'inherit',
+                        lineHeight: 1.4, resize: 'none',
+                      }}
+                    />
+
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 8, marginTop: 6 }}>
                       ID: {selectedTagData.id} · {SHAPES[selectedTagData.shape]?.label || 'Process'}
                     </div>
 
@@ -1037,63 +1078,17 @@ export default function WorkflowPage({ navigate }) {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       padding: cfg.contentPad || '0 8px',
                     }}>
-                      {isEditing ? (
-                        <textarea
-                          autoFocus
-                          ref={el => {
-                            if (el) {
-                              el.style.height = 'auto'
-                              el.style.height = el.scrollHeight + 'px'
-                              el.style.width = 'auto'
-                              el.style.width = Math.max(160, el.scrollWidth + 20) + 'px'
-                            }
-                          }}
-                          value={editText}
-                          onChange={e => {
-                            setEditText(e.target.value)
-                            e.target.style.height = 'auto'
-                            e.target.style.height = e.target.scrollHeight + 'px'
-                            e.target.style.width = 'auto'
-                            e.target.style.width = Math.max(160, e.target.scrollWidth + 20) + 'px'
-                            const cfg2 = SHAPES[tag.shape] || SHAPES.rectangle
-                            const textLen = e.target.value.length
-                            const charWidth = tag.shape === 'diamond' ? 9 : 7.5
-                            const newW = Math.max(cfg2.width, Math.min(340, Math.ceil(textLen * charWidth) + 40))
-                            const lines = e.target.value.split('\n').length
-                            const lineH = 18
-                            const newH = Math.max(cfg2.height, 40 + lines * lineH)
-                            if (tagRefs.current[tag.id]) {
-                              tagRefs.current[tag.id].style.width = newW + 'px'
-                              tagRefs.current[tag.id].style.height = newH + 'px'
-                            }
-                          }}
-                          onBlur={saveEdit}
-                          onKeyDown={e => { if (e.key === 'Escape') { setEditing(null); setEditText('') } }}
-                          onClick={e => e.stopPropagation()}
-                          onMouseDown={e => e.stopPropagation()}
-                          style={{
-                            minHeight: 36, maxHeight: 180, overflowY: 'auto',
-                            background: 'rgba(0,0,0,0.5)',
-                            border: `1px solid ${C.cyan}50`, borderRadius: 6,
-                            padding: '6px 8px', textAlign: 'left',
-                            color: '#fff', fontSize: 11, fontWeight: 600,
-                            outline: 'none', fontFamily: 'inherit',
-                            lineHeight: 1.4, resize: 'none',
-                            boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-                          }}
-                        />
-                      ) : (
-                        <span style={{
-                          display: 'block', fontSize: 11, fontWeight: 600, color: C.text,
-                          padding: 0, lineHeight: 1.35, textAlign: 'center',
-                          wordBreak: 'break-word', overflowWrap: 'break-word',
-                        }}>
-                          {tag.text}
-                        </span>
-                      )}
+                      <span style={{
+                        display: 'block', fontSize: 11, fontWeight: 600, color: C.text,
+                        padding: 0, lineHeight: 1.35, textAlign: 'center',
+                        wordBreak: 'break-word', overflowWrap: 'break-word',
+                        opacity: editing === tag.id ? 0.4 : 1,
+                      }}>
+                        {tag.text}
+                      </span>
 
                       {/* Grip indicator (center, visible on hover) */}
-                      {isHovered && !isEditing && (
+                      {isHovered && !editing && (
                         <div style={{
                           position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)',
                           color: 'rgba(255,255,255,0.15)', display: 'flex', pointerEvents: 'none',
