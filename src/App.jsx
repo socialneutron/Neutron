@@ -14,7 +14,7 @@ import ChatSystem from './pages/ChatSystem';
 import ProfilePage from './pages/ProfilePage';
 import BusinessPage from './pages/BusinessPage';
 import SettingsPage from './pages/SettingsPage';
-import GraphPage from './pages/GraphPage';
+import WorkflowPage from './pages/WorkflowPage';
 import BottomNav from './components/BottomNav';
 import StoreVerification from './pages/StoreVerification';
 import StoreCreated from './pages/StoreCreated';
@@ -31,7 +31,6 @@ import PostDetail from './pages/social/PostDetail';
 import PostDiscussionPage from './pages/social/PostDiscussionPage';
 import BookmarksPage from './pages/social/BookmarksPage';
 import ExplorePage from './pages/ExplorePage';
-import { GraphDetailPage, ExplorerPage, AiInsightsPage, WatchlistPage, TagFeedPage, AssetDetailPage, MarketsPage, PortfolioPage } from './pages/graphs';
 
 export default function App() {
   const { user, loading } = useAuth()
@@ -71,11 +70,9 @@ export default function App() {
     navigate('welcome')
   }
 
-  const mainPages = ['home', 'chat', 'explore', 'graphs', 'create', 'business', 'profile']
+  const mainPages = ['home', 'chat', 'explore', 'workflow', 'create', 'business', 'profile']
 
-  const graphSubPages = ['graph-detail', 'explorer', 'ai-insights', 'watchlist', 'tag', 'asset', 'markets', 'portfolio']
-
-  const subPages = ['notifications', 'settings', 'post', 'bookmarks', 'explore', 'topic', ...graphSubPages]
+  const subPages = ['notifications', 'settings', 'post', 'bookmarks', 'explore', 'topic']
 
   const navigateAuth = (page, params) => {
     if (params) setAuthParams(params)
@@ -138,24 +135,8 @@ export default function App() {
         return <StoreCreated key="storeCreated" navigate={navigate} />
       case 'settings':
         return <SettingsPage key="settings" navigate={navigate} onLogout={handleLogout} />
-      case 'graphs':
-        return <GraphPage key="graphs" navigate={navigate} user={user} fxEnabled={fxEnabled} setFxEnabled={setFxEnabled} />
-      case 'graph-detail':
-        return <GraphDetailPage key="graph-detail" graphId={navParams.graphId || 'g1'} navigate={navigate} user={user} />
-      case 'explorer':
-        return <ExplorerPage key="explorer" navigate={navigate} user={user} />
-      case 'ai-insights':
-        return <AiInsightsPage key="ai-insights" navigate={navigate} user={user} />
-      case 'watchlist':
-        return <WatchlistPage key="watchlist" navigate={navigate} user={user} />
-      case 'tag':
-        return <TagFeedPage key="tag" tag={navParams.tag || 'AI'} navigate={navigate} user={user} />
-      case 'asset':
-        return <AssetDetailPage key="asset" symbol={navParams.symbol || 'BTC'} navigate={navigate} user={user} />
-      case 'markets':
-        return <MarketsPage key="markets" navigate={navigate} user={user} />
-      case 'portfolio':
-        return <PortfolioPage key="portfolio" navigate={navigate} user={user} />
+      case 'workflow':
+        return <WorkflowPage key="workflow" navigate={navigate} />
       default:
         return <HomeFeed key="default" navigate={navigate} user={user} sharedAssetData={sharedAssetData} onClearAssetData={() => setSharedAssetData(null)} />
     }

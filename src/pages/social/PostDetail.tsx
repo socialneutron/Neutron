@@ -75,12 +75,12 @@ export default function PostDetail({ postId, navigate }: PostDetailProps) {
       if (data) {
         setPost(data)
         setLiked(data.is_liked || false)
-        setLikeCount(data.likes_count)
+        setLikeCount(data.likes_count || 0)
         setBookmarked(data.is_bookmarked || false)
-        setBookmarkCount(data.bookmarks_count)
+        setBookmarkCount(data.bookmarks_count || 0)
         setReposted(data.is_reposted || false)
-        setRepostCount(data.reposts_count)
-        setCommentCount(data.comments_count)
+        setRepostCount(data.reposts_count || 0)
+        setCommentCount(data.comments_count || 0)
       } else {
         setError('Post not found')
       }
@@ -141,8 +141,10 @@ export default function PostDetail({ postId, navigate }: PostDetailProps) {
     setLiked(newLiked); setLikeCount(c => newLiked ? c + 1 : c - 1)
     try {
       await likeService.toggle(user.id, post.id)
-      if (newLiked && post.author_id !== user.id) await notificationService.create(post.author_id, user.id, 'like', post.id)
-      updatePost(post.id, { is_liked: newLiked, likes_count: newLiked ? post.likes_count + 1 : post.likes_count - 1 })
+      updatePost(post.id, { is_liked: newLiked, likes_count: newLiked ? likeCount + 1 : likeCount - 1 })
+      if (newLiked && post.author_id !== user.id) {
+        notificationService.create(post.author_id, user.id, 'like', post.id).catch(() => {})
+      }
     } catch {
       setLiked(prevLiked); setLikeCount(prevCount)
     }
@@ -172,7 +174,7 @@ export default function PostDetail({ postId, navigate }: PostDetailProps) {
     try {
       await repostService.toggle(user.id, post.id)
       if (nowReposted && post.author_id !== user.id) await notificationService.create(post.author_id, user.id, 'repost', post.id)
-      updatePost(post.id, { is_reposted: nowReposted, reposts_count: nowReposted ? post.reposts_count + 1 : post.reposts_count - 1 })
+      updatePost(post.id, { is_reposted: nowReposted, reposts_count: nowReposted ? repostCount + 1 : repostCount - 1 })
     } catch {
       setReposted(prevReposted); setRepostCount(prevCount)
     }
@@ -214,7 +216,7 @@ export default function PostDetail({ postId, navigate }: PostDetailProps) {
     } catch {}
   }, [user, post, navigate])
 
-  const formatNum = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n)
+  const formatNum = (n: number) => (n || 0) >= 1000 ? ((n || 0) / 1000).toFixed(1) + 'K' : String(n || 0)
 
   const fullDate = (date: string) => new Date(date).toLocaleString('en-US', {
     hour: 'numeric', minute: '2-digit', hour12: true,
@@ -300,7 +302,7 @@ export default function PostDetail({ postId, navigate }: PostDetailProps) {
         <div style={{ padding: '20px 0' }}>
           <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
             <div
-              onClick={() => navigate('profile', { author: { name: post.author?.display_name, handle: `@${post.author?.username}`, avatar: post.author?.avatar_url, verified: post.author?.is_verified } })}
+              onClick={() => navigate('profile', { author: { id: post.author_id, name: post.author?.display_name, handle: `@${post.author?.username}`, avatar: post.author?.avatar_url, verified: post.author?.is_verified } })}
               style={{
                 width: 52, height: 52, borderRadius: 14, cursor: 'pointer', flexShrink: 0,
                 background: post.author?.avatar_url ? `url(${post.author.avatar_url}) center/cover` : `linear-gradient(135deg, ${post.category_color}60, #8a2be260)`,
@@ -312,7 +314,7 @@ export default function PostDetail({ postId, navigate }: PostDetailProps) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <span
-                  onClick={() => navigate('profile', { author: { name: post.author?.display_name, handle: `@${post.author?.username}` } })}
+                  onClick={() => navigate('profile', { author: { id: post.author_id, name: post.author?.display_name, handle: `@${post.author?.username}` } })}
                   style={{ fontSize: 16, fontWeight: 700, color: C.text, cursor: 'pointer' }}
                 >
                   {post.author?.display_name}

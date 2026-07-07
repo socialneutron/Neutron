@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import type { User } from '../types/database'
+import { notificationService } from './notificationService'
 
 export const followService = {
   async toggle(followerId: string, followingId: string): Promise<boolean> {
@@ -21,6 +22,8 @@ export const followService = {
       await supabase.from('follows').insert({ follower_id: followerId, following_id: followingId })
       await supabase.rpc('increment_count', { table_name: 'users', column_name: 'followers_count', row_id: followingId })
       await supabase.rpc('increment_count', { table_name: 'users', column_name: 'following_count', row_id: followerId })
+      // Fire-and-forget notification
+      notificationService.create(followingId, followerId, 'follow').catch(() => {})
       return true
     }
   },

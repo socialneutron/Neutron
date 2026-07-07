@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Settings, MessageSquare, MapPin, LinkIcon, Calendar, FileText, Send, X } from 'lucide-react'
+import { ArrowLeft, Settings, MessageSquare, LinkIcon, Calendar, FileText, Send, X, Grid, Tag, Lock, Check, Bookmark, Heart, MessageCircle, User } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSupabaseAuth } from '../context/SupabaseAuthContext'
 import { userService, followService } from '../services'
 import { useProfileStore } from '../stores/profileStore'
 import { useChatStore } from '../stores/chatStore'
 import { useUserAvatar } from '../stores/userAvatarStore'
+import { useHighlightStore } from '../stores/highlightStore'
 import PostCard from '../components/social/PostCard'
 
 const C = {
@@ -22,6 +23,7 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
   const { profile, setProfile, isFollowing, setIsFollowing, toggleFollow } = useProfileStore()
   const { getOrCreateConversation, addMessage } = useChatStore()
   const { avatar: globalAvatar, displayName: globalDisplayName, bio: globalBio } = useUserAvatar()
+  const { highlightsByUser, loadHighlights } = useHighlightStore()
 
   const [userPosts, setUserPosts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -30,6 +32,11 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
   const [chatMessages, setChatMessages] = useState([])
   const [followersCount, setFollowersCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
+  const [activeTab, setActiveTab] = useState('posts')
+  const [showFollowers, setShowFollowers] = useState(false)
+  const [showFollowing, setShowFollowing] = useState(false)
+  const [followersList, setFollowersList] = useState([])
+  const [followingList, setFollowingList] = useState([])
   const chatEndRef = useRef(null)
 
   const activeUser = firebaseUser || propUser
@@ -50,7 +57,6 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
     ? (profileAuthor.handle?.replace('@', '') || profileAuthor.name?.toLowerCase()?.replace(/\s/g, ''))
     : currentUsername || 'pratham'
 
-  // Load profile from Supabase
   useEffect(() => {
     let cancelled = false
     const load = async () => {
@@ -76,6 +82,7 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
               setFollowersCount(followers.length || profileData.followers_count || 0)
               setFollowingCount(followingList.length || profileData.following_count || 0)
             }
+            if (!cancelled) loadHighlights(profileData.id)
           }
         } catch {
           if (!cancelled) setUserPosts([])
@@ -92,6 +99,7 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
             setFollowersCount(followers.length || supaProfile.followers_count || 0)
             setFollowingCount(followingList.length || supaProfile.following_count || 0)
           }
+          if (!cancelled) loadHighlights(supaProfile.id)
         } catch {
           if (!cancelled) setUserPosts([])
         }
@@ -100,7 +108,7 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
     }
     load()
     return () => { cancelled = true }
-  }, [resolvedUsername, isViewingOther, currentUser, supaProfile, setProfile, setIsFollowing, profileAuthor?.id])
+  }, [resolvedUsername, isViewingOther, currentUser, supaProfile, setProfile, setIsFollowing, profileAuthor?.id, loadHighlights])
 
   const handleFollow = useCallback(async () => {
     const followerId = currentUser?.id || currentUser?.uid
@@ -109,6 +117,18 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
     setFollowersCount(prev => nowFollowing ? prev + 1 : prev - 1)
   }, [currentUser, profile, toggleFollow])
 
+  const loadFollowersList = useCallback(async () => {
+    if (!profile) return
+    const list = await followService.getFollowers(profile.id)
+    setFollowersList(list)
+  }, [profile])
+
+  const loadFollowingList = useCallback(async () => {
+    if (!profile) return
+    const list = await followService.getFollowing(profile.id)
+    setFollowingList(list)
+  }, [profile])
+
   const displayName = isOwnProfile
     ? (globalDisplayName || profile?.display_name || activeUser?.username || 'Pratham')
     : (profile?.display_name || profileAuthor?.name || 'User')
@@ -116,11 +136,16 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
     ? (profile?.username ? `@${profile.username}` : activeUser?.handle || '@pratham')
     : (profile?.username ? `@${profile.username}` : profileAuthor?.handle || '@user')
   const bio = isOwnProfile
-    ? (globalBio || profile?.bio || 'Building high-performance decentralized applications.')
+    ? (globalBio || profile?.bio || '')
     : (profile?.bio || '')
   const avatar = isOwnProfile
     ? (globalAvatar || profile?.avatar_url || activeUser?.avatar || '')
     : (profile?.avatar_url || profileAuthor?.avatar || '')
+
+  const isPrivate = profile?.is_private || false
+  const isUnapproved = isPrivate && !isOwnProfile && !isFollowing
+
+  const highlights = profile ? (highlightsByUser[profile.id] || []) : []
 
   if (loading) return (
     <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -146,103 +171,287 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
 
       {/* Profile Info */}
       <div style={{ padding: '0 20px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', marginTop: '-36px', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', marginTop: '-36px', marginBottom: '8px' }}>
           <div style={{
-            width: '76px', height: '76px', borderRadius: '20px',
+            width: '80px', height: '80px', borderRadius: '50%',
             background: avatar ? `url(${avatar}) center/cover` : 'linear-gradient(135deg,#00D2FF,#7928CA)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', fontWeight: 900, color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', fontWeight: 900, color: '#fff',
             border: '3px solid #05050A', flexShrink: 0,
           }}>
             {!avatar && displayName[0]?.toUpperCase()}
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <h1 style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-0.3px', color: C.text, margin: 0 }}>{displayName}</h1>
-            {(profile?.is_verified || profileAuthor?.verified) && <span style={{ background: 'rgba(0,210,255,0.1)', border: '1px solid rgba(0,210,255,0.2)', borderRadius: '4px', padding: '2px 6px', fontSize: '9px', fontWeight: 700, color: C.cyan, letterSpacing: '0.06em' }}>VERIFIED</span>}
-          </div>
-          <p style={{ color: C.muted, fontSize: '14px', margin: 0 }}>{handle}</p>
-          {bio && <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: '1.65', margin: 0 }}>{bio}</p>}
-
-          {/* Meta */}
-          {(profile?.location || profile?.website || profile?.created_at) && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 4 }}>
-              {profile.location && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: C.muted }}><MapPin size={14} /> {profile.location}</span>}
-              {profile.website && <a href={profile.website} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: C.cyan, textDecoration: 'none' }}><LinkIcon size={14} /> {profile.website.replace(/^https?:\/\//, '')}</a>}
-              {profile.created_at && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: C.muted }}><Calendar size={14} /> Joined {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>}
-            </div>
-          )}
-
-          {/* Stats */}
-          <div style={{ display: 'flex', gap: 16, padding: '14px 0', borderTop: '1px solid rgba(0,210,255,0.08)', borderBottom: '1px solid rgba(0,210,255,0.08)', marginTop: 8 }}>
-            {[
-              { val: userPosts.length, label: 'Posts' },
-              { val: followersCount, label: 'Followers' },
-              { val: followingCount, label: 'Following' },
-            ].map((s, i) => (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{s.val.toLocaleString()}</span>
-                <span style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{s.label}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Action buttons — hidden entirely on own profile or when viewing self via different route */}
-          {!isOwnProfile && !isSelf && (
-            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={handleFollow}
-                style={{
-                  flex: 1, padding: '12px', borderRadius: '10px', cursor: 'pointer',
-                  background: isFollowing ? 'rgba(0,210,255,0.15)' : 'rgba(5,5,10,0.4)',
-                  border: isFollowing ? '1px solid rgba(0,210,255,0.3)' : '1px solid rgba(0,210,255,0.3)',
-                  color: isFollowing ? C.cyan : '#e5e7eb', fontSize: 14, fontWeight: 700, transition: 'all 0.2s',
-                }}
-              >
-                {isFollowing ? '✓ Following' : '+ Follow'}
-              </motion.button>
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
-                onClick={() => {
-                  const peer = {
-                    id: profileAuthor?.handle || profile?.username || displayName,
-                    username: displayName,
-                    avatar: profileAuthor?.avatar || avatar,
-                    online: true, isVerified: profileAuthor?.verified || false,
-                  }
-                  getOrCreateConversation(peer)
-                  setChatMessages([])
-                  setShowChat(true)
-                }}
-                style={{ flex: 1, padding: 12, borderRadius: 10, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, #2563eb, #7c3aed)', color: '#fff', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-              >
-                <MessageSquare size={15} /> Message
-              </motion.button>
-            </div>
-          )}
-          {isOwnProfile && (
-            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
-                onClick={() => navigate('settings')}
-                style={{ flex: 1, padding: 12, borderRadius: 10, border: `1px solid ${C.cardBdr}`, cursor: 'pointer', background: 'rgba(255,255,255,0.04)', color: '#e5e7eb', fontSize: 14, fontWeight: 700, transition: 'all 0.2s' }}
-              >
-                <Settings size={15} style={{ marginRight: 6, verticalAlign: 'middle' }} /> Edit Profile
-              </motion.button>
+        {/* Display Name & Verified */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 2 }}>
+          <h1 style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.3px', color: C.text, margin: 0 }}>{displayName}</h1>
+          {(profile?.is_verified || profileAuthor?.verified) && (
+            <div style={{ width: 20, height: 20, borderRadius: '50%', background: C.cyan, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Check size={12} color="#000" strokeWidth={3} />
             </div>
           )}
         </div>
-      </div>
 
-      {/* Posts Feed */}
-      <div style={{ borderTop: '1px solid rgba(0,210,255,0.08)' }}>
-        {userPosts.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 60, color: C.muted }}>
-            <FileText size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
-            <p style={{ margin: 0, fontSize: 14 }}>No posts yet</p>
+        {/* Username & Privacy */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: bio ? 8 : 0 }}>
+          <p style={{ color: C.muted, fontSize: '14px', margin: 0 }}>{handle}</p>
+          {isPrivate && <Lock size={12} color={C.muted} />}
+        </div>
+
+        {/* Bio */}
+        {bio && <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: '1.65', margin: '0 0 8px' }}>{bio}</p>}
+
+        {/* Link */}
+        {(profile?.website) && (
+          <a href={profile.website} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: C.cyan, textDecoration: 'none', marginBottom: 8 }}>
+            <LinkIcon size={13} /> {profile.website.replace(/^https?:\/\//, '')}
+          </a>
+        )}
+
+        {/* Joined date */}
+        {profile?.created_at && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: C.muted, marginBottom: 8 }}>
+            <Calendar size={12} /> Joined {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
           </div>
-        ) : (
-          userPosts.map((post, i) => <PostCard key={post.id} post={post} navigate={navigate} delay={i * 0.05} />)
+        )}
+
+        {/* Stats */}
+        <div style={{ display: 'flex', gap: 20, padding: '12px 0', marginTop: 4 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <span style={{ fontSize: 17, fontWeight: 800, color: C.text }}>{userPosts.length.toLocaleString()}</span>
+            <span style={{ fontSize: 12, color: C.muted }}>posts</span>
+          </div>
+          <div onClick={() => { loadFollowersList(); setShowFollowers(true) }} style={{ display: 'flex', flexDirection: 'column', gap: 1, cursor: 'pointer' }}>
+            <span style={{ fontSize: 17, fontWeight: 800, color: C.text }}>{followersCount.toLocaleString()}</span>
+            <span style={{ fontSize: 12, color: C.muted }}>followers</span>
+          </div>
+          <div onClick={() => { loadFollowingList(); setShowFollowing(true) }} style={{ display: 'flex', flexDirection: 'column', gap: 1, cursor: 'pointer' }}>
+            <span style={{ fontSize: 17, fontWeight: 800, color: C.text }}>{followingCount.toLocaleString()}</span>
+            <span style={{ fontSize: 12, color: C.muted }}>following</span>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        {!isOwnProfile && !isSelf && (
+          <div style={{ display: 'flex', gap: '10px', marginTop: 4 }}>
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={handleFollow}
+              style={{
+                flex: 1, padding: '10px', borderRadius: '8px', cursor: 'pointer',
+                background: isFollowing ? 'rgba(0,210,255,0.15)' : C.cyan,
+                border: isFollowing ? '1px solid rgba(0,210,255,0.3)' : '1px solid transparent',
+                color: isFollowing ? C.cyan : '#000', fontSize: 13, fontWeight: 700, transition: 'all 0.2s',
+              }}
+            >
+              {isFollowing ? 'Following' : 'Follow'}
+            </motion.button>
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+              onClick={() => {
+                const peer = {
+                  id: profileAuthor?.handle || profile?.username || displayName,
+                  username: displayName,
+                  avatar: profileAuthor?.avatar || avatar,
+                  online: true, isVerified: profileAuthor?.verified || false,
+                }
+                getOrCreateConversation(peer)
+                setChatMessages([])
+                setShowChat(true)
+              }}
+              style={{ flex: 1, padding: 10, borderRadius: 8, border: `1px solid ${C.cardBdr}`, cursor: 'pointer', background: 'rgba(255,255,255,0.04)', color: '#e5e7eb', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+            >
+              <MessageSquare size={14} /> Message
+            </motion.button>
+          </div>
+        )}
+        {isOwnProfile && (
+          <div style={{ display: 'flex', gap: '10px', marginTop: 4 }}>
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+              onClick={() => navigate('settings')}
+              style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid rgba(0,210,255,0.4)`, cursor: 'pointer', background: 'rgba(0,210,255,0.08)', color: C.cyan, fontSize: 13, fontWeight: 700, transition: 'all 0.2s', textAlign: 'center' }}
+            >
+              Edit Profile
+            </motion.button>
+          </div>
         )}
       </div>
+
+      {/* Highlights */}
+      {highlights.length > 0 && (
+        <div style={{ padding: '8px 20px 16px', borderBottom: `1px solid ${C.cardBdr}` }}>
+          <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
+            {highlights.map(hl => (
+              <div key={hl.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer', minWidth: 64 }}>
+                <div style={{
+                  width: 60, height: 60, borderRadius: '50%',
+                  border: '2px solid rgba(255,255,255,0.1)', overflow: 'hidden',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: `url(${hl.cover_url}) center/cover`,
+                }}>
+                  {!hl.cover_url && <Bookmark size={20} color={C.muted} />}
+                </div>
+                <span style={{ fontSize: 10, color: C.muted, textAlign: 'center', maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hl.title}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Private profile notice */}
+      {isUnapproved && (
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted }}>
+          <Lock size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
+          <p style={{ fontSize: 15, fontWeight: 600, color: C.text, margin: '0 0 4px' }}>This account is private</p>
+          <p style={{ fontSize: 13, margin: 0 }}>Follow to see their posts</p>
+        </div>
+      )}
+
+      {/* Tabs */}
+      {!isUnapproved && (
+        <>
+          <div style={{ display: 'flex', borderTop: `1px solid ${C.cardBdr}` }}>
+            {[
+              { id: 'posts', icon: <Grid size={18} /> },
+              { id: 'tagged', icon: <User size={18} /> },
+              { id: 'saved', icon: <Bookmark size={18} /> },
+            ].map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '12px 0', background: 'none', border: 'none',
+                borderTop: activeTab === tab.id ? '1px solid #00D2FF' : '1px solid transparent',
+                color: activeTab === tab.id ? C.cyan : C.muted, cursor: 'pointer',
+              }}>
+                {tab.icon}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          <AnimatePresence mode="wait">
+            {activeTab === 'posts' && (
+              <motion.div key="posts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                {userPosts.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted }}>
+                    <FileText size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
+                    <p style={{ fontSize: 14, margin: 0 }}>No posts yet</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
+                    {userPosts.map((post) => (
+                      <motion.div key={post.id} whileHover={{ opacity: 0.85 }} onClick={() => navigate('post', { postId: post.id })}
+                        style={{ aspectRatio: '1', background: post.image_url ? `url(${post.image_url}) center/cover` : 'linear-gradient(135deg, rgba(0,210,255,0.08), rgba(121,40,202,0.08))', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
+                        {!post.image_url && (
+                          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 6 }}>
+                            <span style={{ fontSize: 9, color: C.muted, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>{post.title}</span>
+                          </div>
+                        )}
+                        <div style={{ position: 'absolute', bottom: 4, right: 5, display: 'flex', gap: 5 }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 1, color: '#fff', fontSize: 9, textShadow: '0 1px 3px rgba(0,0,0,0.7)' }}><Heart size={9} fill="#fff" /> {post.likes_count || 0}</span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 1, color: '#fff', fontSize: 9, textShadow: '0 1px 3px rgba(0,0,0,0.7)' }}><MessageCircle size={9} fill="#fff" /> {post.comments_count || 0}</span>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            )}
+            {activeTab === 'tagged' && (
+              <motion.div key="tagged" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted }}>
+                  <Tag size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
+                  <p style={{ fontSize: 14, margin: 0 }}>No tagged posts yet</p>
+                </div>
+              </motion.div>
+            )}
+            {activeTab === 'saved' && (
+              <motion.div key="saved" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted }}>
+                  <Bookmark size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
+                  <p style={{ fontSize: 14, margin: 0 }}>No saved posts yet</p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </>
+      )}
+
+      {/* Followers Modal */}
+      <AnimatePresence>
+        {showFollowers && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => setShowFollowers(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              onClick={e => e.stopPropagation()}
+              style={{ width: '100%', maxWidth: 500, maxHeight: '70vh', background: '#090914', borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.cardBdr}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Followers</span>
+                <button onClick={() => setShowFollowers(false)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4 }}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+                {followersList.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 30, color: C.muted, fontSize: 13 }}>No followers yet</div>
+                ) : (
+                  followersList.map(f => (
+                    <div key={f.id} onClick={() => { setShowFollowers(false); navigate('profile', { author: f }) }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px', cursor: 'pointer', transition: 'background 0.15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: f.avatar_url ? `url(${f.avatar_url}) center/cover` : `linear-gradient(135deg, ${C.cyan}, ${C.purple})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                        {!f.avatar_url && f.display_name?.[0]?.toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.display_name}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: C.muted }}>@{f.username}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Following Modal */}
+      <AnimatePresence>
+        {showFollowing && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => setShowFollowing(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              onClick={e => e.stopPropagation()}
+              style={{ width: '100%', maxWidth: 500, maxHeight: '70vh', background: '#090914', borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.cardBdr}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Following</span>
+                <button onClick={() => setShowFollowing(false)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4 }}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+                {followingList.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 30, color: C.muted, fontSize: 13 }}>Not following anyone yet</div>
+                ) : (
+                  followingList.map(f => (
+                    <div key={f.id} onClick={() => { setShowFollowing(false); navigate('profile', { author: f }) }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px', cursor: 'pointer', transition: 'background 0.15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: f.avatar_url ? `url(${f.avatar_url}) center/cover` : `linear-gradient(135deg, ${C.cyan}, ${C.purple})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                        {!f.avatar_url && f.display_name?.[0]?.toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.display_name}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: C.muted }}>@{f.username}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Chat Popup */}
       <AnimatePresence>
@@ -260,7 +469,7 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
           >
             <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.purple})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff' }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: `linear-gradient(135deg, ${C.cyan}, ${C.purple})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff' }}>
                   {displayName[0]?.toUpperCase()}
                 </div>
                 <div>

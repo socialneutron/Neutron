@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Image, X } from 'lucide-react'
+import { ArrowLeft, X, Upload, AlertCircle } from 'lucide-react'
 import { useSupabaseAuth } from '../../context/SupabaseAuthContext'
 import { postService } from '../../services'
 import { useFeedStore } from '../../stores/feedStore'
@@ -21,6 +21,8 @@ const CATEGORIES = [
   { name: 'General', color: '#4b5563' },
 ]
 
+const MAX_IMAGE_SIZE_MB = 10
+
 interface CreatePostProps {
   navigate: (page: string, params?: any) => void
 }
@@ -28,14 +30,47 @@ interface CreatePostProps {
 export default function CreatePost({ navigate }: CreatePostProps) {
   const { user } = useSupabaseAuth()
   const { addPost } = useFeedStore()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [category, setCategory] = useState('General')
   const [categoryColor, setCategoryColor] = useState('#4b5563')
   const [tags, setTags] = useState('')
-  const [imageUrl, setImageUrl] = useState('')
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState('')
+  const [imageError, setImageError] = useState('')
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState('')
+
+  const handleImageSelect = (file: File | null) => {
+    setImageError('')
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setImageError('Only image files are accepted')
+      return
+    }
+    if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+      setImageError(`Image must be under ${MAX_IMAGE_SIZE_MB}MB`)
+      return
+    }
+    setImageFile(file)
+    const reader = new FileReader()
+    reader.onload = (e) => setImagePreview(e.target.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  const handleRemoveImage = () => {
+    setImageFile(null)
+    setImagePreview('')
+    setImageError('')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
+    handleImageSelect(file)
+  }
 
   const handlePost = async () => {
     if (!user || !title.trim()) return
@@ -47,7 +82,7 @@ export default function CreatePost({ navigate }: CreatePostProps) {
       category,
       category_color: categoryColor,
       tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-      image_url: imageUrl,
+      image_url: imagePreview,
     })
     if (post) {
       const author = { id: user.id, display_name: user.user_metadata?.display_name || user.email?.split('@')[0] || 'User', username: user.user_metadata?.username || user.email?.split('@')[0] || 'user', avatar_url: user.user_metadata?.avatar_url || '', banner_url: '', bio: '', website: '', location: '', is_verified: false, followers_count: 0, following_count: 0, posts_count: 0, created_at: '', updated_at: '' }
@@ -98,8 +133,37 @@ export default function CreatePost({ navigate }: CreatePostProps) {
         <input value={tags} onChange={e => setTags(e.target.value)} placeholder="Tags (comma separated)"
           style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.cardBdr}`, borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#fff', outline: 'none' }} />
 
-        <input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="Image URL (optional)"
-          style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.cardBdr}`, borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#fff', outline: 'none' }} />
+        {/* Image Upload */}
+        <div>
+          <label style={{ fontSize: 12, color: C.muted, marginBottom: 6, display: 'block' }}>Image (optional)</label>
+          {imagePreview ? (
+            <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.cardBdr}` }}>
+              <img src={imagePreview} alt="Preview" style={{ width: '100%', maxHeight: 300, objectFit: 'cover', display: 'block' }} />
+              <button onClick={handleRemoveImage}
+                style={{ position: 'absolute', top: 8, right: 8, width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.7)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <X size={16} />
+              </button>
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '8px 12px', background: 'linear-gradient(transparent, rgba(0,0,0,0.8))', fontSize: 12, color: '#ccc' }}>
+                {imageFile?.name} ({(imageFile!.size / 1024).toFixed(1)} KB)
+              </div>
+            </div>
+          ) : (
+            <div
+              onDrop={handleDrop}
+              onDragOver={e => e.preventDefault()}
+              onClick={() => fileInputRef.current?.click()}
+              style={{ border: `2px dashed ${C.cardBdr}`, borderRadius: 12, padding: '32px 20px', textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.2s, background 0.2s' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = C.cyan; e.currentTarget.style.background = 'rgba(0,210,255,0.04)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = C.cardBdr; e.currentTarget.style.background = 'transparent' }}
+            >
+              <Upload size={28} color={C.muted} style={{ margin: '0 auto 8px', display: 'block' }} />
+              <p style={{ margin: 0, fontSize: 13, color: C.muted }}>Click to upload or drag & drop</p>
+              <p style={{ margin: '4px 0 0', fontSize: 11, color: '#4b5563' }}>PNG, JPG, GIF, WebP — Max {MAX_IMAGE_SIZE_MB}MB</p>
+            </div>
+          )}
+          {imageError && <p style={{ margin: '6px 0 0', fontSize: 12, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 4 }}><AlertCircle size={12} /> {imageError}</p>}
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={e => handleImageSelect(e.target.files?.[0] || null)} style={{ display: 'none' }} />
+        </div>
       </div>
     </div>
   )

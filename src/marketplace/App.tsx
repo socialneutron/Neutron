@@ -4,8 +4,8 @@ import { ASSET_LISTINGS } from "./data";
 import { Asset, Category } from "./types";
 import {
   Search, Heart, ShoppingCart, Eye, Shield, ShieldCheck, X,
-  TrendingUp, MapPin, Users, DollarSign, Tag, Lock, Zap,
-  Home, Compass, FileText, Package, BarChart2, Settings,
+  TrendingUp, MapPin, Users, DollarSign, Tag,
+  Home, FileText, BarChart2, Settings,
   ChevronRight, ChevronLeft, ChevronDown, UploadCloud, Plus,
   CheckCircle, Clock, Star, Check, ArrowUpRight, Layers, CreditCard,
   UserCircle, Edit2, Trash2, ShoppingBag, Bell, Send,
@@ -13,9 +13,6 @@ import {
   GraduationCap, Wrench, Microscope, Smile, Phone, Mail,
   Download, File, Repeat2
 } from "lucide-react";
-import EscrowPortal from "./components/EscrowPortal";
-import { useEscrowStore } from "./store/escrowStore";
-import SellAssetDashboard from "./components/SellAssetDashboard";
 import { useUserAvatar } from '../stores/userAvatarStore';
 import { postService } from '../services';
 import { useFeedStore } from '../stores/feedStore';
@@ -598,20 +595,17 @@ function MarketplaceView({
 }
 
 // ─── SIDEBAR NAV ─────────────────────────────────────────────────────
-type Tab = "marketplace" | "escrow" | "sell-assets" | "hire-artists" | "suppliers";
+type Tab = "hire-artists" | "suppliers";
 
 const NAV_ITEMS: { id:Tab;label:string;icon:React.ReactNode }[] = [
-  { id:"marketplace",label:"Marketplace",icon:<Compass size={18} /> },
-  { id:"escrow",label:"Transactions",icon:<Lock size={18} /> },
-  { id:"sell-assets",label:"Sell Assets",icon:<Package size={18} /> },
-  { id:"hire-artists",label:"Hire Artists",icon:<Users size={18} /> },
+  { id:"hire-artists",label:"Services",icon:<Users size={18} /> },
   { id:"suppliers",label:"Suppliers",icon:<ShoppingBag size={18} /> },
 ];
 
 // ─── ROOT APP ────────────────────────────────────────────────────────
 // ─── HIRE ARTISTS (extracted to prevent inline-recreation focus bug) ───
 interface Review { reviewer:string;avatar:string;stars:number;text:string;time:string }
-interface ArtistProfile { name:string;handle:string;avatar:string;specialty:string;rate:string;rating:number;reviews:number;verified:boolean;email:string;phone:string;portfolio:{name:string;type:string;size:string;url:string}[];reviewList:Review[] }
+interface ArtistProfile { name:string;handle:string;avatar:string;specialty:string;rate:string;rating:number;reviews:number;verified:boolean;email:string;phone:string;location?:string;portfolio:{name:string;type:string;size:string;url:string}[];reviewList:Review[] }
 const mkReview = (reviewer:string,avatar:string,stars:number,text:string,time:string):Review => ({ reviewer,avatar,stars,text,time });
 
 const DEFAULT_ARTISTS: ArtistProfile[] = [
@@ -630,8 +624,9 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
   const [searchInput, setSearchInput] = useState("");
   const [artists, setArtists] = useState<ArtistProfile[]>(DEFAULT_ARTISTS);
   const [showApplyModal, setShowApplyModal] = useState(false);
-  const [contactArtist, setContactArtist] = useState<ArtistProfile | null>(null);
-  const [applyForm, setApplyForm] = useState({ name:"",field:"",rate:"",portfolioFile:null as File|null });
+  const [selectedProfile, setSelectedProfile] = useState<ArtistProfile | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [applyForm, setApplyForm] = useState({ name:"",field:"",email:"",phone:"",location:"",rateValue:"",rateType:"per Hour",portfolioFiles:[] as File[] });
   const [reviewText, setReviewText] = useState("");
   const [reviewStars, setReviewStars] = useState(5);
   const [drawerReviews, setDrawerReviews] = useState<Record<string,Review[]>>({});
@@ -642,14 +637,31 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
   const [blockedHandles, setBlockedHandles] = useState<Set<string>>(new Set());
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState("");
+  const [activeCategory, setActiveCategory] = useState("All");
+
+  const SERVICE_CATEGORIES = [
+    "All","3D Modeling","Graphic Design","Web Dev","Music","Writing","Video","Marketing","Consulting","Photography","Animation","UI/UX",
+  ];
 
   const visibleArtists = artists.filter(a => !blockedHandles.has(a.handle));
+  const filteredByCategory = activeCategory === "All"
+    ? visibleArtists
+    : visibleArtists.filter(a => a.specialty === activeCategory);
   const filteredArtists = searchQuery.trim()
-    ? visibleArtists.filter(a => {
+    ? filteredByCategory.filter(a => {
         const q = searchQuery.toLowerCase();
         return a.specialty.toLowerCase().includes(q) || a.name.toLowerCase().includes(q);
       })
-    : visibleArtists;
+    : filteredByCategory;
+
+  const handleProfileClick = (profile: ArtistProfile) => {
+    setSelectedProfile(profile);
+    setIsDrawerOpen(true);
+  };
+  const handleCloseDrawer = () => {
+    setIsDrawerOpen(false);
+    setSelectedProfile(null);
+  };
 
   const inputStyle: React.CSSProperties = {
     width:"100%",padding:"10px 12px",borderRadius:"8px",border:`1px solid ${C.border}`,
@@ -658,16 +670,34 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
 
   return (
     <div style={{ flex:1,overflowY:"auto",padding:"28px 32px" }}>
+      {/* Service Category Toggle */}
+      <div style={{ display:"flex",gap:"6px",overflowX:"auto",marginBottom:"20px" }}
+        className="scrollbar-none">
+        {SERVICE_CATEGORIES.map(cat => (
+          <button key={cat} onClick={() => setActiveCategory(cat)}
+            style={{
+              flexShrink:0, padding:"6px 14px", borderRadius:"20px", border: activeCategory === cat ? "none" : `1px solid ${C.border}`,
+              background: activeCategory === cat ? C.accent : "transparent",
+              color: activeCategory === cat ? "#fff" : C.muted,
+              fontSize:"12px", fontWeight:600, cursor:"pointer", whiteSpace:"nowrap",
+              transition:"all 0.15s",
+            }}
+            onMouseEnter={e => { if (activeCategory !== cat) { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "#fff" } }}
+            onMouseLeave={e => { if (activeCategory !== cat) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = C.muted } }}
+          >{cat}</button>
+        ))}
+      </div>
+
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"24px" }}>
         <div>
-          <h2 style={{ margin:0,fontSize:"20px",fontWeight:800,color:"#fff" }}>Hire Artists</h2>
-          <p style={{ margin:"4px 0 0",fontSize:"13px",color:C.muted }}>Find and hire creative professionals for your next project.</p>
+          <h2 style={{ margin:0,fontSize:"20px",fontWeight:800,color:"#fff" }}>Hire {activeCategory === "All" ? "Services" : activeCategory}</h2>
+          <p style={{ margin:"4px 0 0",fontSize:"13px",color:C.muted }}>Find and hire professional services for your next project.</p>
         </div>
         <button onClick={()=>setShowApplyModal(true)}
           style={{ display:"flex",alignItems:"center",gap:"6px",padding:"9px 16px",borderRadius:"8px",border:`1px solid ${C.accent}`,background:"rgba(37,99,235,0.12)",color:C.accent,fontSize:"12px",fontWeight:700,cursor:"pointer",transition:"all 0.15s",whiteSpace:"nowrap" }}
           onMouseEnter={e=>{e.currentTarget.style.background="rgba(37,99,235,0.25)"}}
           onMouseLeave={e=>{e.currentTarget.style.background="rgba(37,99,235,0.12)"}}
-        ><Plus size={14} /> Apply as an Artist</button>
+        ><Plus size={14} /> List Your Service</button>
       </div>
 
       {/* Search bar */}
@@ -686,11 +716,11 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
 
       {/* Artists grid */}
       <div style={{ marginBottom:"16px" }}>
-        <h3 style={{ margin:0,fontSize:"15px",fontWeight:700,color:"#fff" }}>{searchQuery.trim()?`Results for "${searchQuery}"`:"Featured"} Artists</h3>
+        <h3 style={{ margin:0,fontSize:"15px",fontWeight:700,color:"#fff" }}>{searchQuery.trim()?`Results for "${searchQuery}"`:"Featured"} Services</h3>
       </div>
       <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:"14px" }}>
         {filteredArtists.map((artist,i) => (
-          <motion.div key={i} whileHover={{ y:-2,borderColor:"rgba(37,99,235,0.3)" }}
+          <motion.div key={artist.handle} whileHover={{ y:-2,borderColor:"rgba(37,99,235,0.3)" }}
             style={{ background:C.card,border:`1px solid ${C.border}`,borderRadius:"14px",padding:"18px",display:"flex",flexDirection:"column",gap:"12px",transition:"border-color 0.2s" }}>
             <div style={{ display:"flex",alignItems:"center",gap:"12px",cursor:"pointer" }}
               onClick={()=>navigate('profile',{ author:{ name:artist.name,handle:artist.handle,avatar:artist.avatar,verified:artist.verified } })}>
@@ -712,10 +742,10 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
               <span style={{ fontSize:"12px",fontWeight:600,color:"#fff" }}>{artist.rating}</span>
               <span style={{ fontSize:"11px",color:C.muted }}>({artist.reviews} reviews)</span>
             </div>
-            <button onClick={()=>setContactArtist(artist)}
+            <button onClick={()=>handleProfileClick(artist)}
               style={{ width:"100%",padding:"9px",borderRadius:"8px",border:"none",background:C.accent,color:"#fff",fontSize:"12px",fontWeight:700,cursor:"pointer",transition:"background 0.15s" }}
               onMouseEnter={e=>e.currentTarget.style.background=C.accentHov} onMouseLeave={e=>e.currentTarget.style.background=C.accent}
-            >Contact Artist</button>
+            >Book Service</button>
           </motion.div>
         ))}
       </div>
@@ -726,7 +756,7 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
           <motion.div initial={{ opacity:0,scale:0.95 }} animate={{ opacity:1,scale:1 }} onClick={e=>e.stopPropagation()}
             style={{ background:"#111827",border:`1px solid ${C.border}`,borderRadius:"16px",width:"100%",maxWidth:"480px",padding:"24px",maxHeight:"90vh",overflowY:"auto" }}>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px" }}>
-              <h3 style={{ margin:0,fontSize:"16px",fontWeight:800,color:"#fff" }}>Apply as an Artist</h3>
+              <h3 style={{ margin:0,fontSize:"16px",fontWeight:800,color:"#fff" }}>List Your Service</h3>
               <button onClick={()=>setShowApplyModal(false)} style={{ background:"none",border:"none",color:C.muted,cursor:"pointer",padding:4 }}><X size={18} /></button>
             </div>
             <div style={{ display:"flex",flexDirection:"column",gap:"14px" }}>
@@ -739,37 +769,68 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
                 <input placeholder="Type your specific profession (e.g., Comedian, Doctor, Writer, Pilot...)" value={applyForm.field} onChange={e=>setApplyForm({...applyForm,field:e.target.value})} style={inputStyle} />
               </div>
               <div>
-                <label style={{ display:"block",fontSize:"11px",fontWeight:600,color:C.muted,marginBottom:"6px" }}>Rate / Hour</label>
-                <input placeholder="e.g. $95/hr" value={applyForm.rate} onChange={e=>setApplyForm({...applyForm,rate:e.target.value})} style={inputStyle} />
+                <label style={{ display:"block",fontSize:"11px",fontWeight:600,color:C.muted,marginBottom:"6px" }}>Email Address <span style={{ color:C.accent }}>*</span></label>
+                <input type="email" placeholder="e.g., alex@service.com" value={applyForm.email} onChange={e=>setApplyForm({...applyForm,email:e.target.value})} style={inputStyle} />
               </div>
               <div>
-                <label style={{ display:"block",fontSize:"11px",fontWeight:600,color:C.muted,marginBottom:"6px" }}>Portfolio Upload</label>
+                <label style={{ display:"block",fontSize:"11px",fontWeight:600,color:C.muted,marginBottom:"6px" }}>Phone Number <span style={{ color:C.accent }}>*</span></label>
+                <input type="tel" placeholder="e.g., +1 (555) 019-2834" value={applyForm.phone} onChange={e=>setApplyForm({...applyForm,phone:e.target.value})} style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ display:"block",fontSize:"11px",fontWeight:600,color:C.muted,marginBottom:"6px" }}>Location <span style={{ color:C.muted,fontWeight:400 }}>(Optional)</span></label>
+                <input placeholder="e.g., New York, NY" value={applyForm.location} onChange={e=>setApplyForm({...applyForm,location:e.target.value})} style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ display:"block",fontSize:"11px",fontWeight:600,color:C.muted,marginBottom:"6px" }}>Rate</label>
+                <div style={{ display:"flex",gap:"6px" }}>
+                  <input placeholder="e.g., 95" value={applyForm.rateValue} onChange={e=>setApplyForm({...applyForm,rateValue:e.target.value})}
+                    style={{ ...inputStyle, flex:1 }} />
+                  <select value={applyForm.rateType} onChange={e=>setApplyForm({...applyForm,rateType:e.target.value})}
+                    style={{ ...inputStyle, width:"auto",minWidth:"110px",cursor:"pointer" }}>
+                    <option value="per Hour" style={{ background:"#111827" }}>per Hour</option>
+                    <option value="per Service" style={{ background:"#111827" }}>per Service</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={{ display:"block",fontSize:"11px",fontWeight:600,color:C.muted,marginBottom:"6px" }}>Upload Media Proofs (Photos, Videos, or Documents)</label>
                 <label style={{ display:"flex",alignItems:"center",gap:"8px",padding:"12px",borderRadius:"8px",border:`1px dashed ${C.border}`,background:"#0d1220",cursor:"pointer",transition:"border-color 0.15s" }}
                   onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
                   <UploadCloud size={16} color={C.muted} />
-                  <span style={{ fontSize:"12px",color:applyForm.portfolioFile?C.subtext:C.muted }}>{applyForm.portfolioFile?applyForm.portfolioFile.name:"Choose files (PDF, ZIP, images, video)"}</span>
-                  <input type="file" accept=".pdf,.zip,.png,.jpg,.jpeg,.mp4,.mov,.mp3" style={{ display:"none" }} onChange={e=>setApplyForm({...applyForm,portfolioFile:e.target.files?.[0]||null})} />
+                  <span style={{ fontSize:"12px",color:applyForm.portfolioFiles.length?C.subtext:C.muted }}>
+                    {applyForm.portfolioFiles.length ? `${applyForm.portfolioFiles.length} file(s) selected` : "Choose files (images, videos, PDFs, ZIPs)"}
+                  </span>
+                  <input type="file" accept="image/*,video/*,application/pdf,application/zip" multiple style={{ display:"none" }}
+                    onChange={e=>setApplyForm({...applyForm,portfolioFiles:Array.from(e.target.files||[])})} />
                 </label>
               </div>
               <button onClick={()=>{
-                if(!applyForm.name.trim()||!applyForm.field.trim())return;
-                const rateStr = applyForm.rate.trim() || "$0/hr";
+                if(!applyForm.name.trim()||!applyForm.field.trim()||!applyForm.email.trim()||!applyForm.phone.trim())return;
+                const rateStr = applyForm.rateValue.trim()
+                  ? `$${applyForm.rateValue.trim()}/${applyForm.rateType}`
+                  : "$0/hr";
                 const newArtist: ArtistProfile = {
                   name: applyForm.name.trim(),
                   handle: "@" + applyForm.name.trim().toLowerCase().replace(/\s+/g, "_"),
                   avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(applyForm.name.trim())}&background=2563eb&color=fff&size=150`,
                   specialty: applyForm.field.trim(),
-                  rate: rateStr.startsWith("$") ? rateStr : `$${rateStr}`,
+                  rate: rateStr,
                   rating: 5.0,
                   reviews: 0,
                   verified: false,
-                  email: "",
-                  phone: "",
-                  portfolio: [],
+                  email: applyForm.email.trim(),
+                  phone: applyForm.phone.trim(),
+                  location: applyForm.location.trim() || undefined,
+                  portfolio: applyForm.portfolioFiles.map(f => ({
+                    name: f.name,
+                    type: f.type,
+                    size: `${(f.size / 1024 / 1024).toFixed(1)} MB`,
+                    url: URL.createObjectURL(f),
+                  })),
                   reviewList: [],
                 };
                 setArtists(prev => [newArtist, ...prev]);
-                setApplyForm({ name:"", field:"", rate:"", portfolioFile:null });
+                setApplyForm({ name:"", field:"", email:"", phone:"", location:"", rateValue:"", rateType:"per Hour", portfolioFiles:[] });
                 setShowApplyModal(false);
               }}
                 style={{ width:"100%",padding:"11px",borderRadius:"8px",border:"none",background:C.accent,color:"#fff",fontSize:"13px",fontWeight:700,cursor:"pointer",marginTop:"4px",transition:"background 0.15s" }}
@@ -781,8 +842,8 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
       )}
 
       {/* ── Contact Artist Drawer ────────────────────────────────── */}
-      {contactArtist && (
-        <div style={{ position:"fixed",inset:0,zIndex:200,display:"flex",alignItems:"center",justifyContent:"flex-end",background:"rgba(0,0,0,0.5)",backdropFilter:"blur(4px)" }} onClick={()=>setContactArtist(null)}>
+      {isDrawerOpen && selectedProfile && (
+        <div style={{ position:"fixed",inset:0,zIndex:200,display:"flex",alignItems:"center",justifyContent:"flex-end",background:"rgba(0,0,0,0.5)",backdropFilter:"blur(4px)" }} onClick={()=>handleCloseDrawer()}>
           <motion.div initial={{ x:400,opacity:0 }} animate={{ x:0,opacity:1 }} transition={{ type:"spring",damping:28,stiffness:300 }} onClick={e=>e.stopPropagation()}
             style={{ width:"100%",maxWidth:"420px",height:"100%",background:"#111827",borderLeft:`1px solid ${C.border}`,display:"flex",flexDirection:"column",overflow:"hidden" }}>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 20px",borderBottom:`1px solid ${C.border}`,position:"relative" }}>
@@ -806,21 +867,21 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
                     </div>
                   )}
                 </div>
-                <button onClick={()=>setContactArtist(null)} style={{ background:"none",border:"none",color:C.muted,cursor:"pointer",padding:4 }}><X size={18} /></button>
+                <button onClick={()=>handleCloseDrawer()} style={{ background:"none",border:"none",color:C.muted,cursor:"pointer",padding:4 }}><X size={18} /></button>
               </div>
             </div>
             <div style={{ flex:1,overflowY:"auto",padding:"20px" }}>
               <div style={{ display:"flex",alignItems:"center",gap:"14px",marginBottom:"20px" }}>
-                <img src={contactArtist.avatar} alt="" style={{ width:"56px",height:"56px",borderRadius:"14px",objectFit:"cover",border:`1px solid ${C.border}` }} />
+                <img src={selectedProfile.avatar} alt="" style={{ width:"56px",height:"56px",borderRadius:"14px",objectFit:"cover",border:`1px solid ${C.border}` }} />
                 <div>
                   <div style={{ display:"flex",alignItems:"center",gap:"6px" }}>
-                    <span style={{ fontSize:"16px",fontWeight:800,color:"#fff" }}>{contactArtist.name}</span>
-                    {contactArtist.verified && <span style={{ width:"16px",height:"16px",borderRadius:"50%",background:C.cyan,color:"#fff",fontSize:"8px",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700 }}>✓</span>}
+                    <span style={{ fontSize:"16px",fontWeight:800,color:"#fff" }}>{selectedProfile.name}</span>
+                    {selectedProfile.verified && <span style={{ width:"16px",height:"16px",borderRadius:"50%",background:C.cyan,color:"#fff",fontSize:"8px",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700 }}>✓</span>}
                   </div>
-                  <span style={{ fontSize:"12px",color:C.muted }}>{contactArtist.handle}</span>
+                  <span style={{ fontSize:"12px",color:C.muted }}>{selectedProfile.handle}</span>
                   <div style={{ display:"flex",alignItems:"center",gap:"8px",marginTop:"4px" }}>
-                    <span style={{ fontSize:"11px",color:C.subtext }}>{contactArtist.specialty}</span>
-                    <span style={{ fontSize:"13px",fontWeight:700,color:C.green }}>{contactArtist.rate}</span>
+                    <span style={{ fontSize:"11px",color:C.subtext }}>{selectedProfile.specialty}</span>
+                    <span style={{ fontSize:"13px",fontWeight:700,color:C.green }}>{selectedProfile.rate}</span>
                   </div>
                 </div>
               </div>
@@ -828,17 +889,41 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
                 <h4 style={{ margin:"0 0 10px",fontSize:"12px",fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em" }}>Contact Details</h4>
                 <div style={{ display:"flex",flexDirection:"column",gap:"8px" }}>
                   <div style={{ display:"flex",alignItems:"center",gap:"10px",padding:"10px 12px",borderRadius:"8px",background:"#0d1220",border:`1px solid ${C.border}` }}>
-                    <Mail size={14} color={C.accent} /><div><span style={{ fontSize:"10px",color:C.muted,display:"block" }}>Email Address</span><span style={{ fontSize:"13px",color:"#fff" }}>{contactArtist.email}</span></div>
+                    <Mail size={14} color={C.accent} />
+                    <div style={{ flex:1 }}><span style={{ fontSize:"10px",color:C.muted,display:"block" }}>Email Address</span>
+                      <a href="#" onClick={e => {
+                        e.preventDefault()
+                        const to = encodeURIComponent(selectedProfile.email)
+                        const su = encodeURIComponent("Project Inquiry via Neutron")
+                        const body = encodeURIComponent(`Hi ${selectedProfile.name},\n\nI found your contact from Neutron Social and would love to discuss a potential project with you...`)
+                        window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${su}&body=${body}`, '_blank')
+                      }}
+                        style={{ fontSize:"13px",color:"#60a5fa",textDecoration:"none",fontWeight:600 }}
+                        onMouseEnter={e=>e.currentTarget.style.textDecoration="underline"}
+                        onMouseLeave={e=>e.currentTarget.style.textDecoration="none"}>
+                        {selectedProfile.email}
+                      </a>
+                    </div>
+                    <a href="#" onClick={e => {
+                      e.preventDefault()
+                      const to = encodeURIComponent(selectedProfile.email)
+                      const su = encodeURIComponent("Project Inquiry via Neutron")
+                      const body = encodeURIComponent(`Hi ${selectedProfile.name},\n\nI found your contact from Neutron Social and would love to discuss a potential project with you...`)
+                      window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${su}&body=${body}`, '_blank')
+                    }}
+                      style={{ width:28,height:28,borderRadius:6,background:"rgba(37,99,235,0.12)",border:"none",color:C.accent,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,textDecoration:"none" }}>
+                      <Send size={12} />
+                    </a>
                   </div>
                   <div style={{ display:"flex",alignItems:"center",gap:"10px",padding:"10px 12px",borderRadius:"8px",background:"#0d1220",border:`1px solid ${C.border}` }}>
-                    <Phone size={14} color={C.green} /><div><span style={{ fontSize:"10px",color:C.muted,display:"block" }}>Phone Number</span><span style={{ fontSize:"13px",color:"#fff" }}>{contactArtist.phone}</span></div>
+                    <Phone size={14} color={C.green} /><div><span style={{ fontSize:"10px",color:C.muted,display:"block" }}>Phone Number</span><span style={{ fontSize:"13px",color:"#fff" }}>{selectedProfile.phone}</span></div>
                   </div>
                 </div>
               </div>
               <div>
                 <h4 style={{ margin:"0 0 10px",fontSize:"12px",fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em" }}>Portfolio & Attachments</h4>
                 <div style={{ display:"flex",flexDirection:"column",gap:"6px" }}>
-                  {contactArtist.portfolio.map((file,i) => (
+                  {selectedProfile.portfolio.map((file,i) => (
                     <div key={i} style={{ display:"flex",alignItems:"center",gap:"10px",padding:"10px 12px",borderRadius:"8px",background:"#0d1220",border:`1px solid ${C.border}`,transition:"border-color 0.15s",cursor:"pointer" }}
                       onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(37,99,235,0.3)"} onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
                       <div style={{ width:"32px",height:"32px",borderRadius:"8px",background:"rgba(37,99,235,0.12)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
@@ -854,7 +939,7 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
               <div style={{ marginTop:"24px" }}>
                 <h4 style={{ margin:"0 0 10px",fontSize:"12px",fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.05em" }}>Reviews & Feedback</h4>
                 {(() => {
-                  const activeReviews = drawerReviews[contactArtist.handle] || contactArtist.reviewList;
+                  const activeReviews = drawerReviews[selectedProfile.handle] || selectedProfile.reviewList;
                   const totalCount = activeReviews.length;
                   const avg = totalCount > 0 ? (activeReviews.reduce((sum, r) => sum + r.stars, 0) / totalCount) : 0;
                   const rounded = Math.round(avg * 10) / 10;
@@ -868,7 +953,7 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
                   );
                 })()}
                 <div style={{ display:"flex",flexDirection:"column",gap:"10px",maxHeight:"220px",overflowY:"auto",marginBottom:"12px" }}>
-                  {(drawerReviews[contactArtist.handle] || contactArtist.reviewList).map((r,i)=>(
+                  {(drawerReviews[selectedProfile.handle] || selectedProfile.reviewList).map((r,i)=>(
                     <div key={i} style={{ padding:"10px 12px",borderRadius:"8px",background:"#0d1220",border:`1px solid ${C.border}` }}>
                       <div style={{ display:"flex",alignItems:"center",gap:"8px",marginBottom:"6px" }}>
                         <img src={r.avatar} alt="" style={{ width:"24px",height:"24px",borderRadius:"50%",objectFit:"cover" }} />
@@ -885,15 +970,15 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
                     {[1,2,3,4,5].map(s=><button key={s} onClick={()=>setReviewStars(s)} style={{ background:"none",border:"none",cursor:"pointer",padding:1 }}><Star size={14} fill={s<=reviewStars?"#f59e0b":"none"} color={s<=reviewStars?"#f59e0b":"#374151"} /></button>)}
                   </div>
                   <input placeholder="Write a review…" value={reviewText} onChange={e=>setReviewText(e.target.value)}
-                    onKeyDown={e=>{ if(e.key==="Enter"&&reviewText.trim()&&contactArtist){ const newRev:Review={reviewer:userName,avatar:userAvatar,stars:reviewStars,text:reviewText.trim(),time:"Just now"}; setDrawerReviews(prev=>({...prev,[contactArtist.handle]:[newRev,...(prev[contactArtist.handle]||[])]})); setReviewText("");setReviewStars(5); } }}
+                    onKeyDown={e=>{ if(e.key==="Enter"&&reviewText.trim()&&selectedProfile){ const newRev:Review={reviewer:userName,avatar:userAvatar,stars:reviewStars,text:reviewText.trim(),time:"Just now"}; setDrawerReviews(prev=>({...prev,[selectedProfile.handle]:[newRev,...(prev[selectedProfile.handle]||[])]})); setReviewText("");setReviewStars(5); } }}
                     style={{ flex:1,padding:"8px 10px",borderRadius:"8px",border:`1px solid ${C.border}`,background:"#0d1220",color:"#fff",fontSize:"12px",fontFamily:"inherit",outline:"none" }} />
                 </div>
               </div>
             </div>
             <div style={{ padding:"14px 20px",borderTop:`1px solid ${C.border}`,display:"flex",gap:"8px" }}>
-              <button onClick={()=>setContactArtist(null)} style={{ flex:1,padding:"11px",borderRadius:"8px",border:"none",background:C.accent,color:"#fff",fontSize:"13px",fontWeight:700,cursor:"pointer",transition:"background 0.15s" }}
+              <button onClick={()=>handleCloseDrawer()} style={{ flex:1,padding:"11px",borderRadius:"8px",border:"none",background:C.accent,color:"#fff",fontSize:"13px",fontWeight:700,cursor:"pointer",transition:"background 0.15s" }}
                 onMouseEnter={e=>e.currentTarget.style.background=C.accentHov} onMouseLeave={e=>e.currentTarget.style.background=C.accent}>Send Message</button>
-              <button onClick={()=>{ if(contactArtist){ setRepostCaption(`Great work by ${contactArtist.name} ${contactArtist.handle}!`); setShowRepostModal(true); } }}
+              <button onClick={()=>{ if(selectedProfile){ setRepostCaption(`Great work by ${selectedProfile.name} ${selectedProfile.handle}!`); setShowRepostModal(true); } }}
                 style={{ padding:"11px 14px",borderRadius:"8px",border:`1px solid ${C.border}`,background:"transparent",color:C.muted,fontSize:"13px",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:"6px",transition:"all 0.15s" }}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=C.green;e.currentTarget.style.color=C.green}} onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.muted}}
               ><Repeat2 size={15} /> Repost</button>
@@ -903,7 +988,7 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
       )}
 
       {/* ── Repost Modal ────────────────────────────────────────── */}
-      {showRepostModal && contactArtist && (
+      {showRepostModal && selectedProfile && (
         <div style={{ position:"fixed",inset:0,zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)" }} onClick={()=>{setShowRepostModal(false);setRepostCaption("")}}>
           <motion.div initial={{ opacity:0,scale:0.95 }} animate={{ opacity:1,scale:1 }} onClick={e=>e.stopPropagation()}
             style={{ background:"#111827",border:`1px solid ${C.border}`,borderRadius:"16px",width:"100%",maxWidth:"480px",padding:"24px" }}>
@@ -912,20 +997,20 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
               <button onClick={()=>{setShowRepostModal(false);setRepostCaption("")}} style={{ background:"none",border:"none",color:C.muted,cursor:"pointer",padding:4 }}><X size={18} /></button>
             </div>
             <div style={{ display:"flex",alignItems:"center",gap:"12px",padding:"12px",borderRadius:"10px",background:"#0d1220",border:`1px solid ${C.border}`,marginBottom:"14px" }}>
-              <img src={contactArtist.avatar} alt="" style={{ width:"40px",height:"40px",borderRadius:"10px",objectFit:"cover" }} />
+              <img src={selectedProfile.avatar} alt="" style={{ width:"40px",height:"40px",borderRadius:"10px",objectFit:"cover" }} />
               <div>
                 <div style={{ display:"flex",alignItems:"center",gap:"6px" }}>
-                  <span style={{ fontSize:"13px",fontWeight:700,color:"#fff" }}>{contactArtist.name}</span>
-                  {contactArtist.verified && <span style={{ width:"14px",height:"14px",borderRadius:"50%",background:C.cyan,color:"#fff",fontSize:"7px",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700 }}>✓</span>}
+                  <span style={{ fontSize:"13px",fontWeight:700,color:"#fff" }}>{selectedProfile.name}</span>
+                  {selectedProfile.verified && <span style={{ width:"14px",height:"14px",borderRadius:"50%",background:C.cyan,color:"#fff",fontSize:"7px",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700 }}>✓</span>}
                 </div>
-                <span style={{ fontSize:"11px",color:C.muted }}>{contactArtist.handle} · {contactArtist.specialty}</span>
+                <span style={{ fontSize:"11px",color:C.muted }}>{selectedProfile.handle} · {selectedProfile.specialty}</span>
               </div>
             </div>
-            <textarea placeholder={`Share your thoughts about ${contactArtist.name}…`} value={repostCaption} onChange={e=>setRepostCaption(e.target.value)}
+            <textarea placeholder={`Share your thoughts about ${selectedProfile.name}…`} value={repostCaption} onChange={e=>setRepostCaption(e.target.value)}
               rows={4} style={{ width:"100%",padding:"12px",borderRadius:"10px",border:`1px solid ${C.border}`,background:"#0d1220",color:"#fff",fontSize:"13px",fontFamily:"inherit",resize:"vertical",outline:"none",boxSizing:"border-box" }} />
             <div style={{ display:"flex",gap:"8px",marginTop:"14px",justifyContent:"flex-end" }}>
               <button onClick={()=>{setShowRepostModal(false);setRepostCaption("")}} style={{ padding:"9px 16px",borderRadius:"8px",border:`1px solid ${C.border}`,background:"transparent",color:C.muted,fontSize:"12px",fontWeight:700,cursor:"pointer" }}>Cancel</button>
-              <button onClick={async()=>{ if(!contactArtist||!repostCaption.trim())return; const body=`${repostCaption.trim()}\n\nMentioned: ${contactArtist.handle}`; const newPost=await postService.create(userName,{title:`Repost: ${contactArtist.name}`,body,category:"Reposts",category_color:"#22c55e",tags:["repost",contactArtist.handle.replace("@","")]}); if(newPost){const fullPost={...newPost,author:{id:userName,display_name:userName,username:userName.toLowerCase().replace(/\s/g,""),avatar_url:userAvatar,is_verified:false},is_liked:false,is_bookmarked:false,is_reposted:false}as any;useFeedStore.getState().addPost(fullPost);} setShowRepostModal(false);setRepostCaption(""); }}
+              <button onClick={async()=>{ if(!selectedProfile||!repostCaption.trim())return; const body=`${repostCaption.trim()}\n\nMentioned: ${selectedProfile.handle}`; const newPost=await postService.create(userName,{title:`Repost: ${selectedProfile.name}`,body,category:"Reposts",category_color:"#22c55e",tags:["repost",selectedProfile.handle.replace("@","")]}); if(newPost){const fullPost={...newPost,author:{id:userName,display_name:userName,username:userName.toLowerCase().replace(/\s/g,""),avatar_url:userAvatar,is_verified:false},is_liked:false,is_bookmarked:false,is_reposted:false}as any;useFeedStore.getState().addPost(fullPost);} setShowRepostModal(false);setRepostCaption(""); }}
                 style={{ padding:"9px 18px",borderRadius:"8px",border:"none",background:C.green,color:"#000",fontSize:"12px",fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:"6px",transition:"background 0.15s" }}
                 onMouseEnter={e=>e.currentTarget.style.background="#16a34a"} onMouseLeave={e=>e.currentTarget.style.background=C.green}
               ><Repeat2 size={14} /> Post</button>
@@ -935,7 +1020,7 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
       )}
 
       {/* ── Block Artist Confirmation ─────────────────────────── */}
-      {showBlockConfirm && contactArtist && (
+      {showBlockConfirm && selectedProfile && (
         <div style={{ position:"fixed",inset:0,zIndex:250,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)" }} onClick={()=>setShowBlockConfirm(false)}>
           <motion.div initial={{ opacity:0,scale:0.95 }} animate={{ opacity:1,scale:1 }} onClick={e=>e.stopPropagation()}
             style={{ background:"#111827",border:`1px solid ${C.border}`,borderRadius:"16px",width:"100%",maxWidth:"380px",padding:"24px" }}>
@@ -944,11 +1029,11 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
               <h3 style={{ margin:0,fontSize:"15px",fontWeight:800,color:"#fff" }}>Block Artist</h3>
             </div>
             <p style={{ margin:"0 0 18px",fontSize:"13px",color:C.subtext,lineHeight:1.6 }}>
-              Are you sure you want to block <strong style={{color:"#fff"}}>{contactArtist.name}</strong>? They will be hidden from your directory and their content will no longer appear in your feed.
+              Are you sure you want to block <strong style={{color:"#fff"}}>{selectedProfile.name}</strong>? They will be hidden from your directory and their content will no longer appear in your feed.
             </p>
             <div style={{ display:"flex",gap:"8px",justifyContent:"flex-end" }}>
               <button onClick={()=>setShowBlockConfirm(false)} style={{ padding:"9px 16px",borderRadius:"8px",border:`1px solid ${C.border}`,background:"transparent",color:C.muted,fontSize:"12px",fontWeight:700,cursor:"pointer" }}>Cancel</button>
-              <button onClick={()=>{setBlockedHandles(prev=>new Set([...prev,contactArtist.handle]));setShowBlockConfirm(false);setContactArtist(null);}}
+              <button onClick={()=>{setBlockedHandles(prev=>new Set([...prev,selectedProfile.handle]));setShowBlockConfirm(false);handleCloseDrawer();}}
                 style={{ padding:"9px 16px",borderRadius:"8px",border:"none",background:"#ef4444",color:"#fff",fontSize:"12px",fontWeight:700,cursor:"pointer",transition:"background 0.12s" }}
                 onMouseEnter={e=>e.currentTarget.style.background="#dc2626"} onMouseLeave={e=>e.currentTarget.style.background="#ef4444"}
               >Block</button>
@@ -958,7 +1043,7 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
       )}
 
       {/* ── Report Artist Modal ───────────────────────────────── */}
-      {showReportModal && contactArtist && (
+      {showReportModal && selectedProfile && (
         <div style={{ position:"fixed",inset:0,zIndex:250,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)" }} onClick={()=>{setShowReportModal(false);setReportReason("")}}>
           <motion.div initial={{ opacity:0,scale:0.95 }} animate={{ opacity:1,scale:1 }} onClick={e=>e.stopPropagation()}
             style={{ background:"#111827",border:`1px solid ${C.border}`,borderRadius:"16px",width:"100%",maxWidth:"420px",padding:"24px" }}>
@@ -970,7 +1055,7 @@ function HireArtistsView({ navigate, userName, userAvatar }: { navigate:(page:st
               <button onClick={()=>{setShowReportModal(false);setReportReason("")}} style={{ background:"none",border:"none",color:C.muted,cursor:"pointer",padding:4 }}><X size={18} /></button>
             </div>
             <p style={{ margin:"0 0 12px",fontSize:"12px",color:C.muted }}>
-              Reporting <strong style={{color:"#fff"}}>{contactArtist.name}</strong> ({contactArtist.handle}). Please describe the issue below.
+              Reporting <strong style={{color:"#fff"}}>{selectedProfile.name}</strong> ({selectedProfile.handle}). Please describe the issue below.
             </p>
             <textarea placeholder="Describe why you're reporting this artist…" value={reportReason} onChange={e=>setReportReason(e.target.value)}
               rows={4} style={{ width:"100%",padding:"12px",borderRadius:"10px",border:`1px solid ${C.border}`,background:"#0d1220",color:"#fff",fontSize:"13px",fontFamily:"inherit",resize:"vertical",outline:"none",boxSizing:"border-box" }} />
@@ -1217,7 +1302,17 @@ function SuppliersView() {
             <div style={{ display:"flex",flexDirection:"column",gap:"8px",marginBottom:"18px" }}>
               <div style={{ display:"flex",alignItems:"center",gap:"10px",padding:"10px 12px",borderRadius:"8px",background:"#0d1220",border:`1px solid ${C.border}` }}>
                 <Mail size={14} color={C.accent} />
-                <div><span style={{ fontSize:"10px",color:C.muted,display:"block" }}>Email Address</span><span style={{ fontSize:"13px",color:"#fff" }}>{contactSupplier.email}</span></div>
+                <div style={{ flex:1 }}><span style={{ fontSize:"10px",color:C.muted,display:"block" }}>Email Address</span><span style={{ fontSize:"13px",color:"#fff" }}>{contactSupplier.email}</span></div>
+                <a href="#" onClick={e => {
+                  e.preventDefault()
+                  const to = encodeURIComponent(contactSupplier.email)
+                  const su = encodeURIComponent("Supplier Inquiry via Neutron")
+                  const body = encodeURIComponent(`Hi ${contactSupplier.name} Team,\n\nI found your contact from Neutron Social and would love to discuss a potential order with you...`)
+                  window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${su}&body=${body}`, '_blank')
+                }}
+                  style={{ width:28,height:28,borderRadius:6,background:"rgba(37,99,235,0.12)",border:"none",color:C.accent,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,textDecoration:"none" }}>
+                  <Send size={12} />
+                </a>
               </div>
               <div style={{ display:"flex",alignItems:"center",gap:"10px",padding:"10px 12px",borderRadius:"8px",background:"#0d1220",border:`1px solid ${C.border}` }}>
                 <Phone size={14} color={C.green} />
@@ -1253,77 +1348,16 @@ export default function App({ navigate, user, initialTab }: { navigate?: (page:s
   USER = globalDisplayName || user?.username || 'epiclegend766';
   USER_AVATAR = globalAvatar || user?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&fit=crop&q=80';
 
-  const [activeTab, setActiveTab] = useState<Tab>((initialTab as Tab) || "marketplace");
-  const [bidModalAsset, setBidModalAsset] = useState<Asset | null>(null);
-  const [showSellerNotifs, setShowSellerNotifs] = useState(false);
-  const [detailModal, setDetailModal] = useState<Asset | null>(null);
-
-  const {
-    walletBalance, escrowBalance, activeBid, activeTransaction,
-    incomingBids, sellerNotifications,
-    submitBid, acceptBid, rejectBid, advanceEscrowStep, completeEscrow, cancelEscrow,
-  } = useEscrowStore();
-
-  const unreadCount = sellerNotifications.filter(n => !n.read).length;
-
-  const handleSubmitBid = useCallback((amount: number, memo: string) => {
-    if (!bidModalAsset) return;
-    submitBid(bidModalAsset, USER, USER_AVATAR, amount, memo);
-    setBidModalAsset(null);
-    setActiveTab("escrow");
-  }, [bidModalAsset, submitBid]);
-
-  const handleAcceptBid = useCallback((bidId: string) => {
-    acceptBid(bidId);
-    setShowSellerNotifs(false);
-    setActiveTab("escrow");
-  }, [acceptBid]);
-
-  const handleRejectBid = useCallback((bidId: string) => {
-    rejectBid(bidId);
-  }, [rejectBid]);
-
-  const handleBackToMarketplace = () => setActiveTab("marketplace");
-
-  const handleOverviewEscrow = (asset: Asset) => {
-    setDetailModal(asset);
-  };
-
-  const handleCommentAsset = (asset: Asset) => {
-    if (navigate) {
-      navigate('home', { assetData: { id:asset.id,title:asset.name,price:asset.currentValuation,image:asset.image,seller:asset.ownerName,sellerAvatar:asset.ownerAvatar,category:asset.category } });
-    }
-  };
-
-
+  const [activeTab, setActiveTab] = useState<Tab>((initialTab as Tab) || "hire-artists");
 
   const renderView = () => {
     switch (activeTab) {
-      case "escrow":
-        return (
-          <EscrowPortal
-            userName={USER} userAvatar={USER_AVATAR} walletBalance={walletBalance}
-            onBackToMarketplace={handleBackToMarketplace}
-          />
-        );
-      case "sell-assets":
-        return <SellAssetDashboard userName={USER} userAvatar={USER_AVATAR} navigate={navigate} />;
       case "hire-artists":
         return <HireArtistsView navigate={navigate!} userName={USER} userAvatar={USER_AVATAR} />;
       case "suppliers":
         return <SuppliersView />;
-      case "marketplace":
       default:
-        return (
-          <MarketplaceView
-            onOverview={handleOverviewEscrow}
-            onPlaceBid={asset => setBidModalAsset(asset)}
-            onComment={handleCommentAsset}
-            walletBalance={walletBalance}
-            userName={USER}
-            userAvatar={USER_AVATAR}
-          />
-        );
+        return <HireArtistsView navigate={navigate!} userName={USER} userAvatar={USER_AVATAR} />;
     }
   };
 
@@ -1380,57 +1414,6 @@ export default function App({ navigate, user, initialTab }: { navigate?: (page:s
       <div style={{ flex:1,display:"flex",overflow:"hidden",minWidth:0 }}>
         {renderView()}
       </div>
-
-      {/* Seller notification bell (floating) */}
-      <motion.button
-          whileHover={{ scale:1.1 }}
-          onClick={() => setShowSellerNotifs(true)}
-          style={{
-            position:"fixed",bottom:"24px",right:"24px",zIndex:100,
-            width:"52px",height:"52px",borderRadius:"50%",border:"none",
-            background:"linear-gradient(135deg,#f59e0b,#d97706)",
-            color:"#000",cursor:"pointer",
-            display:"flex",alignItems:"center",justifyContent:"center",
-            boxShadow:"0 8px 32px rgba(245,158,11,0.3)",
-          }}
-        >
-          <Bell size={22} />
-          {unreadCount > 0 && (
-            <motion.span
-              initial={{ scale:0 }} animate={{ scale:1 }}
-              style={{ position:"absolute",top:"-2px",right:"-2px",background:C.red,color:"#fff",fontSize:"10px",fontWeight:800,padding:"2px 6px",borderRadius:"99px",minWidth:"18px",textAlign:"center" }}
-            >{unreadCount}</motion.span>
-          )}
-        </motion.button>
-
-      {/* Modals */}
-      {bidModalAsset && (
-        <PlaceBidModal
-          asset={bidModalAsset}
-          onClose={()=>setBidModalAsset(null)}
-          onSubmitBid={handleSubmitBid}
-          walletBalance={walletBalance}
-        />
-      )}
-
-      {showSellerNotifs && (
-        <SellerNotificationPanel
-          notifications={sellerNotifications}
-          incomingBids={incomingBids}
-          onAccept={handleAcceptBid}
-          onReject={handleRejectBid}
-          onDismiss={()=>setShowSellerNotifs(false)}
-        />
-      )}
-
-      {detailModal && (
-        <AssetModal
-          asset={detailModal}
-          onClose={()=>setDetailModal(null)}
-          onPlaceBid={asset=>{setDetailModal(null);setBidModalAsset(asset);}}
-          walletBalance={walletBalance}
-        />
-      )}
     </div>
   );
 }

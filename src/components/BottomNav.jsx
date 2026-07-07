@@ -1,4 +1,4 @@
-import { Home, MessageCircle, Plus, Briefcase, User, TrendingUp, Compass } from 'lucide-react'
+import { Home, MessageCircle, Plus, Briefcase, User, Share2, Compass } from 'lucide-react'
 import './BottomNav.css'
 
 const LEFT_ITEMS = [
@@ -8,7 +8,7 @@ const LEFT_ITEMS = [
 ]
 
 const RIGHT_ITEMS = [
-  { id: 'graphs',   label: 'Graphs',   icon: TrendingUp },
+  { id: 'workflow', label: 'Workflow', icon: Share2 },
   { id: 'business', label: 'Business', icon: Briefcase },
   { id: 'profile',  label: 'Profile',  icon: User },
 ]

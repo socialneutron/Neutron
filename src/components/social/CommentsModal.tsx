@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, Send, Heart, Trash2, MessageCircle } from 'lucide-react'
 import { useSupabaseAuth } from '../../context/SupabaseAuthContext'
 import { commentService, likeService, notificationService } from '../../services'
-import type { CommentWithAuthor } from '../../types/database'
+import type { CommentWithAuthor, Comment } from '../../types/database'
 
 const C = {
   bg: '#05050A', card: '#090914', cardBdr: 'rgba(255,255,255,0.06)',
@@ -253,6 +253,7 @@ export default function CommentsModal({ postId, authorId, onClose, navigate, onC
                     handleDelete={handleDelete}
                     toggleReplies={toggleReplies}
                     timeAgo={timeAgo}
+                    likeAnimating={likeAnimating}
                   />
                 ))}
               </div>
@@ -285,11 +286,12 @@ export default function CommentsModal({ postId, authorId, onClose, navigate, onC
   )
 }
 
-// ─── Recursive Comment Node ───────────────────────────────────
+// Recursive Comment Node
 function CommentNodeComponent({
   comment, depth, user, postId, authorId, navigate, onClose, isNew,
   replyTo, setReplyTo, replyText, setReplyText, replyInputRef, sendingReply,
   handleSendReply, handleLikeComment, handleDelete, toggleReplies, timeAgo,
+  likeAnimating,
 }: {
   comment: CommentNode
   depth: number
@@ -310,6 +312,7 @@ function CommentNodeComponent({
   handleDelete: (id: string, parentId?: string | null) => void
   toggleReplies: (id: string) => void
   timeAgo: (date: string) => string
+  likeAnimating: Set<string>
 }) {
   const maxDepth = 3
   const indent = Math.min(depth, maxDepth)
@@ -381,7 +384,7 @@ function CommentNodeComponent({
                   exit={{ y: comment.is_liked ? -6 : 6, opacity: 0 }}
                   transition={{ duration: 0.2 }}
                 >
-                  {comment.likes_count > 0 ? comment.likes_count : ''}
+                  {(comment.likes_count || 0) > 0 ? (comment.likes_count || 0) : ''}
                 </motion.span>
               </AnimatePresence>
             </motion.button>
@@ -491,6 +494,7 @@ function CommentNodeComponent({
                 handleDelete={(id) => handleDelete(id, comment.id)}
                 toggleReplies={toggleReplies}
                 timeAgo={timeAgo}
+                likeAnimating={likeAnimating}
               />
             ))}
           </motion.div>

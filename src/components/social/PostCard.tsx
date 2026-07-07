@@ -1,11 +1,12 @@
 import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Heart, MessageCircle, Repeat2, Bookmark, MoreHorizontal, Trash2, X, Send } from 'lucide-react'
+import { Heart, MessageCircle, Repeat2, Bookmark, MoreHorizontal, Trash2, X, Send, Share2 } from 'lucide-react'
 import { useSupabaseAuth } from '../../context/SupabaseAuthContext'
 import { likeService, repostService, bookmarkService, postService, notificationService } from '../../services'
 import { useFeedStore } from '../../stores/feedStore'
 import type { PostWithAuthor } from '../../types/database'
 import CommentsModal from './CommentsModal'
+import ShareToChatModal from './ShareToChatModal'
 
 const C = {
   bg: '#05050A', card: '#090914', cardBdr: 'rgba(255,255,255,0.06)',
@@ -35,14 +36,17 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
   const [repostAnimating, setRepostAnimating] = useState(false)
   const [commentAnimating, setCommentAnimating] = useState(false)
   const [showRepostModal, setShowRepostModal] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
   const [repostComment, setRepostComment] = useState('')
   const [reposting, setReposting] = useState(false)
 
   const [showAvatarImg, setShowAvatarImg] = useState(true)
+  const [isTogglingLike, setIsTogglingLike] = useState(false)
 
   const handleLike = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!user) return
+    if (!user || isTogglingLike) return
+    setIsTogglingLike(true)
     const newLiked = !liked
     const prevLiked = liked
     const prevCount = likeCount
@@ -51,15 +55,18 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
     setLiked(newLiked)
     setLikeCount(c => newLiked ? c + 1 : c - 1)
     try {
-      await likeService.toggle(user.id, post.id)
-      const newCount = newLiked ? prevCount + 1 : prevCount - 1
-      updatePost(post.id, { is_liked: newLiked, likes_count: newCount })
-      if (newLiked && post.author_id !== user.id) {
-        await notificationService.create(post.author_id, user.id, 'like', post.id)
+      const isNowLiked = await likeService.toggle(user.id, post.id)
+      setLiked(isNowLiked)
+      setLikeCount(c => isNowLiked ? c + 1 : c - 1)
+      updatePost(post.id, { is_liked: isNowLiked, likes_count: isNowLiked ? prevCount + 1 : prevCount - 1 })
+      if (isNowLiked && post.author_id !== user.id) {
+        notificationService.create(post.author_id, user.id, 'like', post.id).catch(() => {})
       }
     } catch {
       setLiked(prevLiked)
       setLikeCount(prevCount)
+    } finally {
+      setIsTogglingLike(false)
     }
   }, [user, liked, likeCount, post, updatePost])
 
@@ -202,7 +209,7 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{post.author?.display_name}</span>
-                {post.author?.is_verified && <span style={{ width: 15, height: 15, borderRadius: '50%', background: C.cyan, color: '#fff', fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>✓</span>}
+                {post.author?.is_verified && <span style={{ width: 16, height: 16, borderRadius: '50%', background: C.cyan, color: '#000', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 10px rgba(0,210,255,0.5)' }}>✓</span>}
               </div>
               <span style={{ fontSize: 12, color: C.muted }}>@{post.author?.username} · {timeAgo(post.created_at)}</span>
             </div>
@@ -381,6 +388,22 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
 
           <div style={{ flex: 1 }} />
 
+          {/* SHARE */}
+          <motion.button
+            whileTap={{ scale: 0.85 }}
+            onClick={(e) => { e.stopPropagation(); setShowShareModal(true) }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
+              borderRadius: 8, border: 'none', background: 'transparent',
+              color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              transition: 'color 0.2s, background 0.2s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,210,255,0.06)'; e.currentTarget.style.color = C.cyan }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted }}
+          >
+            <Share2 size={16} />
+          </motion.button>
+
           {/* BOOKMARK */}
           <motion.button
             whileTap={{ scale: 0.7 }}
@@ -418,6 +441,14 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
             setTimeout(() => setCommentAnimating(false), 400)
             updatePost(post.id, { comments_count: newCount })
           }}
+        />
+      )}
+
+      {showShareModal && (
+        <ShareToChatModal
+          post={post}
+          onClose={() => setShowShareModal(false)}
+          navigate={navigate}
         />
       )}
 

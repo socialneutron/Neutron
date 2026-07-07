@@ -40,7 +40,7 @@ export default function CommentNode({
 }: CommentNodeProps) {
   const { user } = useSupabaseAuth()
   const [liked, setLiked] = useState(comment.is_liked || false)
-  const [likeCount, setLikeCount] = useState(comment.likes_count)
+  const [likeCount, setLikeCount] = useState(comment.likes_count || 0)
   const [likeAnimating, setLikeAnimating] = useState(false)
   const [showReplyInput, setShowReplyInput] = useState(false)
   const [replyText, setReplyText] = useState('')

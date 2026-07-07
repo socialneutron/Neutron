@@ -1,6 +1,23 @@
 import { supabase } from '../lib/supabase'
 import type { User } from '../types/database'
 
+async function resolveAuthor(post: any): Promise<User> {
+  const author = post.author as any
+  if (author && author.username) return author
+  const { data: user } = await supabase.from('users').select('*').eq('id', post.author_id).maybeSingle()
+  if (user) return user as User
+  return {
+    id: post.author_id || '',
+    username: post.author_username || 'unknown',
+    display_name: post.author_display_name || post.author_username || 'Unknown',
+    avatar_url: post.author_avatar || '',
+    banner_url: '', bio: '', website: '', location: '',
+    is_verified: false, followers_count: 0, following_count: 0, posts_count: 0,
+    created_at: post.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }
+}
+
 export const userService = {
   async getProfile(username: string): Promise<User | null> {
     const { data, error } = await supabase
@@ -49,10 +66,13 @@ export const userService = {
       .order('created_at', { ascending: false })
       .range(from, from + limit - 1)
     if (error) return []
+    if (!data?.length) return []
 
-    if (!currentUserId || !data?.length) return (data || []) as any
+    const resolved = await Promise.all(data.map(async p => ({ ...p, author: await resolveAuthor(p) })))
 
-    const postIds = data.map(p => p.id)
+    if (!currentUserId) return resolved as any[]
+
+    const postIds = resolved.map(p => p.id)
     const [likesRes, bookmarksRes, repostsRes] = await Promise.all([
       supabase.from('likes').select('post_id').eq('user_id', currentUserId).in('post_id', postIds),
       supabase.from('bookmarks').select('post_id').eq('user_id', currentUserId).in('post_id', postIds),
@@ -63,9 +83,8 @@ export const userService = {
     const bookmarkedSet = new Set(bookmarksRes.data?.map(b => b.post_id))
     const repostedSet = new Set(repostsRes.data?.map(r => r.post_id))
 
-    return data.map(p => ({
+    return resolved.map(p => ({
       ...p,
-      author: p.author as any,
       is_liked: likedSet.has(p.id),
       is_bookmarked: bookmarkedSet.has(p.id),
       is_reposted: repostedSet.has(p.id),

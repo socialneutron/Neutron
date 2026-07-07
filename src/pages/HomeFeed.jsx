@@ -23,6 +23,7 @@ export default function HomeFeed({ navigate, user, sharedAssetData, onClearAsset
   const { posts, loading, loadMore, refresh } = useFeedStore()
   const { unreadCount, incrementUnread, setUnreadCount } = useNotificationStore()
   const { avatar: globalAvatar, displayName: globalName } = useUserAvatar()
+  const [feedType, setFeedType] = useState('for_you')
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState('All')
   const [searchResults, setSearchResults] = useState([])
@@ -74,7 +75,12 @@ export default function HomeFeed({ navigate, user, sharedAssetData, onClearAsset
   }, [searchQuery, handleSearch])
 
   const filtered = activeCategory === 'All' ? posts : posts.filter(p => p.category === activeCategory)
-  const displayed = searchQuery ? searchResults : filtered
+  const scored = feedType === 'for_you' ? [...filtered].sort((a, b) => {
+    const scoreA = (a.likes_count || 0) * 2 + (a.comments_count || 0) * 3 + (a.reposts_count || 0) * 4 - (Date.now() - new Date(a.created_at).getTime()) / 3600000
+    const scoreB = (b.likes_count || 0) * 2 + (b.comments_count || 0) * 3 + (b.reposts_count || 0) * 4 - (Date.now() - new Date(b.created_at).getTime()) / 3600000
+    return scoreB - scoreA
+  }) : filtered
+  const displayed = searchQuery ? searchResults : scored
 
   const displayName = globalName || currentUser?.username || currentUser?.user_metadata?.display_name || 'Pratham'
   const avatar = globalAvatar || currentUser?.avatar || currentUser?.user_metadata?.avatar_url || ''
@@ -176,8 +182,21 @@ export default function HomeFeed({ navigate, user, sharedAssetData, onClearAsset
         </motion.div>
       )}
 
+      {/* Feed type toggle */}
+      <div style={{ display: 'flex', gap: 0, padding: '8px 18px 4px' }}>
+        {[
+          { id: 'for_you', label: 'For You' },
+          { id: 'following', label: 'Following' },
+        ].map(t => (
+          <button key={t.id} onClick={() => setFeedType(t.id)}
+            style={{ padding: '6px 16px', borderRadius: 0, border: 'none', borderBottom: `2px solid ${feedType === t.id ? C.cyan : 'transparent'}`, background: 'none', color: feedType === t.id ? C.text : C.muted, fontSize: 13, fontWeight: feedType === t.id ? 700 : 500, cursor: 'pointer', transition: 'all 0.2s' }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {/* Category tabs */}
-      <div style={{ display: 'flex', gap: 6, padding: '12px 18px', overflowX: 'auto', scrollbarWidth: 'none' }}>
+      <div style={{ display: 'flex', gap: 6, padding: '8px 18px', overflowX: 'auto', scrollbarWidth: 'none' }}>
         {CATEGORIES.map(cat => (
           <button key={cat} onClick={() => setActiveCategory(cat)}
             style={{ flexShrink: 0, padding: '6px 14px', borderRadius: 8, border: `1px solid ${activeCategory === cat ? C.cyan : C.cardBdr}`, background: activeCategory === cat ? `${C.cyan}15` : 'transparent', color: activeCategory === cat ? C.cyan : C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.2s' }}

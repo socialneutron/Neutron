@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Heart, MessageCircle, Trash2, Share2, Bookmark, Flag, CornerUpRight, Copy, Languages, GitFork, Award, Lightbulb, Zap, TrendingUp, Star, ThumbsUp, Flame, Rocket } from 'lucide-react'
+import { Heart, MessageCircle, Trash2, Share2, Bookmark, Flag, Copy, Languages, GitFork, Award, Lightbulb, SmilePlus } from 'lucide-react'
 import { useSupabaseAuth } from '../../context/SupabaseAuthContext'
 import { likeService, commentService, notificationService } from '../../services'
-import type { CommentWithAuthor } from '../../types/database'
+import type { CommentWithAuthor, Comment } from '../../types/database'
 import RichCommentComposer from './RichCommentComposer'
 
 const C = {
@@ -68,9 +68,9 @@ export default function CommentThread({
   onCommentDeleted,
   maxVisualDepth = 3,
 }: CommentThreadProps) {
-  const { user } = useSupabaseAuth()
+  const { user, profile } = useSupabaseAuth()
   const [liked, setLiked] = useState(comment.is_liked || false)
-  const [likeCount, setLikeCount] = useState(comment.likes_count)
+  const [likeCount, setLikeCount] = useState(comment.likes_count || 0)
   const [likeAnimating, setLikeAnimating] = useState(false)
   const [showReplyInput, setShowReplyInput] = useState(false)
   const [showReplies, setShowReplies] = useState(comment.showReplies)
@@ -78,6 +78,8 @@ export default function CommentThread({
   const [showActions, setShowActions] = useState<string | null>(null)
   const [reactions, setReactions] = useState<Record<string, number>>(comment.reactions || {})
   const [copied, setCopied] = useState(false)
+  const [showReactionPicker, setShowReactionPicker] = useState(false)
+  const reactionRef = useRef<HTMLDivElement>(null)
 
   const visualDepth = Math.min(depth, maxVisualDepth)
   const isNested = depth > 0
@@ -134,6 +136,7 @@ export default function CommentThread({
       ...prev,
       [key]: (prev[key] || 0) + 1,
     }))
+    setShowReactionPicker(false)
   }, [user])
 
   const handleCopyLink = useCallback(async () => {
@@ -148,6 +151,43 @@ export default function CommentThread({
     if (!user) return
     setShowActions(null)
   }, [user])
+
+  const handleCommentSent = useCallback((createdComment: Comment | null) => {
+    setShowReplyInput(false)
+    if (createdComment) {
+      const displayName = profile?.display_name || user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'User'
+      const username = profile?.username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'user'
+      const newReply: CommentNodeData = {
+        ...createdComment,
+        author: {
+          id: user?.id || '',
+          display_name: displayName,
+          username,
+          avatar_url: profile?.avatar_url || user?.user_metadata?.avatar_url || '',
+          banner_url: '',
+          bio: '',
+          website: '',
+          location: '',
+          is_verified: false,
+          followers_count: 0,
+          following_count: 0,
+          posts_count: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        replies: [],
+        showReplies: false,
+        replyCount: 0,
+        is_liked: false,
+        likes_count: 0,
+        insight_score: 0,
+        reactions: {},
+      }
+      setReplies(prev => [...prev, newReply])
+      setShowReplies(true)
+      onReplyAdded?.(comment.id)
+    }
+  }, [user, profile, comment.id, onReplyAdded])
 
   const timeAgo = (date: string) => {
     const diff = Date.now() - new Date(date).getTime()
@@ -254,7 +294,7 @@ export default function CommentThread({
             )}
           </div>
 
-          {/* Expertise Badges */}
+          {/* Expertise Badges - unified glassmorphic */}
           {comment.expertise_badges && comment.expertise_badges.length > 0 && (
             <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexWrap: 'wrap' }}>
               {comment.expertise_badges.map(badge => {
@@ -262,11 +302,11 @@ export default function CommentThread({
                 if (!config) return null
                 return (
                   <span key={badge} style={{
-                    fontSize: 9, fontWeight: 700, padding: '1px 6px',
-                    borderRadius: 3, color: config.color,
-                    background: `${config.color}15`,
-                    border: `1px solid ${config.color}25`,
-                    letterSpacing: '0.3px',
+                    fontSize: 9, fontWeight: 600, padding: '2px 8px',
+                    borderRadius: 99, color: config.color,
+                    background: `${config.color}12`,
+                    border: `1px solid ${config.color}20`,
+                    letterSpacing: '0.2px',
                   }}>
                     {config.label}
                   </span>
@@ -280,7 +320,7 @@ export default function CommentThread({
             {comment.body}
           </p>
 
-          {/* Reactions Row */}
+          {/* Reactions Row - pill-shaped badges */}
           {hasReactions && (
             <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
               {Object.entries(reactions).filter(([, count]) => count > 0).map(([key, count]) => {
@@ -290,8 +330,12 @@ export default function CommentThread({
                   <span key={key} style={{
                     display: 'flex', alignItems: 'center', gap: 3,
                     background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.cardBdr}`,
-                    borderRadius: 99, padding: '1px 7px', fontSize: 11,
-                  }}>
+                    borderRadius: 99, padding: '2px 8px', fontSize: 11,
+                    transition: 'transform 0.15s, box-shadow 0.15s',
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)' }}
+                    onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
+                  >
                     {reaction.emoji} {count}
                   </span>
                 )
@@ -323,6 +367,61 @@ export default function CommentThread({
               </motion.div>
               {likeCount > 0 && <span>{likeCount}</span>}
             </motion.button>
+
+            {/* Reaction Picker - popover trigger */}
+            <div ref={reactionRef} style={{ position: 'relative' }}>
+              <motion.button
+                whileTap={{ scale: 0.85 }}
+                onClick={() => setShowReactionPicker(!showReactionPicker)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none',
+                  color: showReactionPicker ? C.cyan : C.muted, fontSize: 11, cursor: 'pointer',
+                  padding: '3px 6px', borderRadius: 6, fontWeight: 600,
+                  transition: 'color 0.2s, background 0.2s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,210,255,0.06)'}
+                onMouseLeave={e => { if (!showReactionPicker) e.currentTarget.style.background = 'none' }}
+              >
+                <SmilePlus size={13} />
+              </motion.button>
+
+              <AnimatePresence>
+                {showReactionPicker && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -4, scale: 0.95 }}
+                    transition={{ duration: 0.12 }}
+                    style={{
+                      position: 'absolute', left: 0, top: '100%', marginTop: 4,
+                      background: '#141420', border: `1px solid ${C.cardBdr}`,
+                      borderRadius: 10, padding: '6px 8px', zIndex: 50,
+                      display: 'flex', gap: 2,
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                    }}
+                  >
+                    {REACTION_TYPES.map(r => (
+                      <motion.button
+                        key={r.key}
+                        whileHover={{ scale: 1.2 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => handleReaction(r.emoji, r.key)}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          fontSize: 16, padding: '4px 5px', borderRadius: 6,
+                          transition: 'background 0.1s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                        title={r.label}
+                      >
+                        {r.emoji}
+                      </motion.button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             {/* Reply */}
             <motion.button
@@ -372,7 +471,7 @@ export default function CommentThread({
                     transition={{ duration: 0.12 }}
                     style={{
                       position: 'absolute', left: 0, top: '100%',
-                      background: '#141420', border: `1px solid ${C.border}`,
+                      background: '#141420', border: `1px solid ${C.cardBdr}`,
                       borderRadius: 10, padding: '4px 0', zIndex: 50, minWidth: 160,
                       boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
                     }}
@@ -404,28 +503,6 @@ export default function CommentThread({
             )}
           </div>
 
-          {/* Reaction Picker */}
-          <div style={{ display: 'flex', gap: 2, marginTop: 4 }}>
-            {REACTION_TYPES.map(r => (
-              <motion.button
-                key={r.key}
-                whileHover={{ scale: 1.15 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => handleReaction(r.emoji, r.key)}
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  fontSize: 13, padding: '2px 3px', borderRadius: 4,
-                  opacity: 0.5, transition: 'opacity 0.15s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
-                title={r.label}
-              >
-                {r.emoji}
-              </motion.button>
-            ))}
-          </div>
-
           {/* Inline Reply Composer */}
           <AnimatePresence>
             {showReplyInput && (
@@ -441,10 +518,7 @@ export default function CommentThread({
                   postId={postId}
                   parentId={comment.id}
                   postAuthorId={postAuthorId}
-                  onCommentSent={(parentId) => {
-                    setShowReplyInput(false)
-                    handleReplyAdded(parentId || comment.id)
-                  }}
+                  onCommentSent={handleCommentSent}
                   compact
                 />
               </motion.div>

@@ -21,6 +21,7 @@ export interface User {
 
 export interface Post {
   id: string
+  post_code: number
   author_id: string
   title: string
   body: string

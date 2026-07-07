@@ -65,7 +65,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
-      setLoading(false)
+      enterDemo()
       return
     }
 
