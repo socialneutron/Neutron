@@ -58,7 +58,7 @@ export default function App() {
     if (params.assetData) setSharedAssetData(params.assetData)
     if (params.author) {
       setProfileAuthor(params.author)
-    } else if (page !== 'profile') {
+    } else {
       setProfileAuthor(null)
     }
     setNavParams(params)
