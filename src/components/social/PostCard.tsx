@@ -47,17 +47,14 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
     e.stopPropagation()
     if (!user || isTogglingLike) return
     setIsTogglingLike(true)
-    const newLiked = !liked
     const prevLiked = liked
     const prevCount = likeCount
     setLikeAnimating(true)
     setTimeout(() => setLikeAnimating(false), 600)
-    setLiked(newLiked)
-    setLikeCount(c => newLiked ? c + 1 : c - 1)
     try {
       const isNowLiked = await likeService.toggle(user.id, post.id)
       setLiked(isNowLiked)
-      setLikeCount(c => isNowLiked ? c + 1 : c - 1)
+      setLikeCount(isNowLiked ? prevCount + 1 : prevCount - 1)
       updatePost(post.id, { is_liked: isNowLiked, likes_count: isNowLiked ? prevCount + 1 : prevCount - 1 })
       if (isNowLiked && post.author_id !== user.id) {
         notificationService.create(post.author_id, user.id, 'like', post.id).catch(() => {})
