@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import WorkflowChat from '../components/WorkflowChat'
+
 import {
   Plus, Minus, Trash2, GripVertical, ArrowLeft, PanelLeftClose, PanelLeft,
   Grid3X3, Square, Shapes, MousePointer2,
@@ -1266,16 +1266,6 @@ export default function WorkflowPage({ navigate }) {
           </div>
           </div>
 
-          {/* ─── RIGHT CHAT PANEL ─── */}
-          <aside style={{
-            width: 340, flexShrink: 0,
-            borderLeft: `1px solid ${C.cardBdr}`,
-            background: `${C.card}dd`,
-            backdropFilter: 'blur(16px)',
-            display: 'flex', flexDirection: 'column', overflow: 'hidden', zIndex: 5,
-          }}>
-            <WorkflowChat tags={tags} connections={connections} />
-          </aside>
         </div>
 
         {/* Delete confirmation modal */}
