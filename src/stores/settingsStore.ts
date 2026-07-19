@@ -1,68 +1,93 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+
+type AccountType = 'private' | 'public' | 'company'
+type BusinessTab = 'suppliers' | 'talent' | 'products' | 'magazines'
+type ZoomLevel = 'fit' | '75' | '100' | '125'
 
 interface SettingsState {
-  displayName: string
-  bio: string
-  avatar: string | null
   darkMode: boolean
   accentColor: string
   accentHex: string
-  accountType: 'private' | 'public' | 'company'
+  accountType: AccountType
 
   notifications: {
     mentions: boolean
     likes: boolean
     follows: boolean
-    breaking: boolean
+    comments: boolean
+    email: boolean
+    push: boolean
+    toasts: boolean
+  }
+
+  chat: {
+    readReceipts: boolean
+    typingIndicator: boolean
+    showOnline: boolean
   }
 
   privacy: {
-    privateAccount: boolean
-    readReceipts: boolean
-    showOnline: boolean
     aiPersonalize: boolean
   }
 
-  setDisplayName: (name: string) => void
-  setBio: (bio: string) => void
-  setAvatar: (avatar: string | null) => void
+  business: {
+    defaultTab: BusinessTab
+  }
+
+  workflow: {
+    defaultZoom: ZoomLevel
+  }
+
   setDarkMode: (on: boolean) => void
   setAccentColor: (name: string, hex: string) => void
-  setAccountType: (type: 'private' | 'public' | 'company') => void
+  setAccountType: (type: AccountType) => void
   toggleNotification: (key: keyof SettingsState['notifications']) => void
+  toggleChat: (key: keyof SettingsState['chat']) => void
   togglePrivacy: (key: keyof SettingsState['privacy']) => void
+  setBusinessDefaultTab: (tab: BusinessTab) => void
+  setWorkflowDefaultZoom: (zoom: ZoomLevel) => void
   reset: () => void
 }
 
 const INITIAL = {
-  displayName: 'Pratham',
-  bio: 'Building high-performance dark-themed decentralized applications and state architectures.',
-  avatar: null,
   darkMode: true,
   accentColor: 'Cyber Cyan',
   accentHex: '#00D2FF',
   accountType: 'private' as const,
-  notifications: { mentions: true, likes: true, follows: false, breaking: true },
-  privacy: { privateAccount: false, readReceipts: true, showOnline: true, aiPersonalize: true },
+  notifications: { mentions: true, likes: true, follows: false, comments: true, email: false, push: true, toasts: true },
+  chat: { readReceipts: true, typingIndicator: true, showOnline: true },
+  privacy: { aiPersonalize: true },
+  business: { defaultTab: 'suppliers' as const },
+  workflow: { defaultZoom: 'fit' as const },
 }
 
-export const useSettingsStore = create<SettingsState>((set) => ({
-  ...INITIAL,
+export const useSettingsStore = create<SettingsState>()(
+  persist(
+    (set) => ({
+      ...INITIAL,
 
-  setDisplayName: (name) => set({ displayName: name }),
-  setBio: (bio) => set({ bio }),
-  setAvatar: (avatar) => set({ avatar }),
-  setDarkMode: (on) => set({ darkMode: on }),
-  setAccentColor: (name, hex) => set({ accentColor: name, accentHex: hex }),
-  setAccountType: (type) => set({ accountType: type }),
+      setDarkMode: (on) => set({ darkMode: on }),
+      setAccentColor: (name, hex) => set({ accentColor: name, accentHex: hex }),
+      setAccountType: (type) => set({ accountType: type }),
 
-  toggleNotification: (key) => set((s) => ({
-    notifications: { ...s.notifications, [key]: !s.notifications[key] },
-  })),
+      toggleNotification: (key) => set((s) => ({
+        notifications: { ...s.notifications, [key]: !s.notifications[key] },
+      })),
 
-  togglePrivacy: (key) => set((s) => ({
-    privacy: { ...s.privacy, [key]: !s.privacy[key] },
-  })),
+      toggleChat: (key) => set((s) => ({
+        chat: { ...s.chat, [key]: !s.chat[key] },
+      })),
 
-  reset: () => set(INITIAL),
-}))
+      togglePrivacy: (key) => set((s) => ({
+        privacy: { ...s.privacy, [key]: !s.privacy[key] },
+      })),
+
+      setBusinessDefaultTab: (tab) => set({ business: { defaultTab: tab } }),
+      setWorkflowDefaultZoom: (zoom) => set({ workflow: { defaultZoom: zoom } }),
+
+      reset: () => set(INITIAL),
+    }),
+    { name: 'neutron-settings' }
+  )
+)

@@ -1,4 +1,4 @@
-const User = require('../models/Mongoose');
+const User = require('../models/User.model');
 
 module.exports = (io, socket, onlineUsers) => {
   socket.on('presence:check', ({ userId }) => {

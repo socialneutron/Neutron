@@ -7,12 +7,18 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') })
 
 async function migrate() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-  const sqlPath = path.resolve(__dirname, 'migrations/001_initial.sql')
-  const sql = fs.readFileSync(sqlPath, 'utf8')
+  const migrationsDir = path.resolve(__dirname, 'migrations')
+  const files = fs.readdirSync(migrationsDir)
+    .filter(f => f.endsWith('.sql'))
+    .sort()
 
   console.log('Running migrations...')
   try {
-    await pool.query(sql)
+    for (const file of files) {
+      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8')
+      console.log(`Running migration: ${file}`)
+      await pool.query(sql)
+    }
     console.log('✅ Migrations completed successfully')
   } catch (err) {
     console.error('❌ Migration failed:', err)

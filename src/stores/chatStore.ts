@@ -132,7 +132,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   getOrCreateConversation: (participant) => {
     const existing = get().conversations.find(
-      c => c.participant.username.toLowerCase() === participant.username.toLowerCase()
+      c => c.participant.id === participant.id
     )
     if (existing) return existing
 
@@ -188,6 +188,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   })),
 
   getPendingRequestCount: () => get().messageRequests.filter(r => r.status === 'pending').length,
+
+  getTotalUnread: () => get().conversations.reduce((sum, c) => sum + c.unreadCount, 0),
 
   reset: () => set({ conversations: [], messageRequests: [], activePopupId: null }),
 }))

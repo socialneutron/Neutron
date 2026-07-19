@@ -1,9 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Conversation, UserProfile } from '../types';
 import { Search, Shield, Check, CheckCheck, ArrowLeft, UserPlus } from 'lucide-react';
 import { useChatStore } from '../../stores/chatStore';
 import NeutronLogo from './NeutronLogo';
 import MessageRequestPanel from './MessageRequestPanel';
+
+function formatLastSeen(date: Date): string {
+  const now = new Date();
+  const diff = now.getTime() - new Date(date).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Active now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 interface SidebarProps {
   conversations: Conversation[];
@@ -14,6 +25,7 @@ interface SidebarProps {
   onCreateGroup: (groupName: string, memberIds: string[]) => void;
   myProfile: UserProfile;
   navigate?: (page: string, params?: any) => void;
+  onlineUsers?: Set<string>;
 }
 
 export default function Sidebar({
@@ -25,14 +37,20 @@ export default function Sidebar({
   onCreateGroup,
   myProfile,
   navigate,
+  onlineUsers = new Set(),
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showRequests, setShowRequests] = useState(false);
   const pendingCount = useChatStore((s) => s.messageRequests.filter(r => r.status === 'pending').length);
 
-  const filteredConversations = conversations.filter((c) =>
-    c.participant.username.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredConversations = useMemo(() => {
+    if (!searchQuery.trim()) return conversations;
+    const q = searchQuery.toLowerCase();
+    return conversations.filter((c) =>
+      c.participant.username.toLowerCase().includes(q) ||
+      c.messages.some((m) => m.text.toLowerCase().includes(q))
+    );
+  }, [conversations, searchQuery]);
 
   return (
     <div
@@ -250,7 +268,7 @@ export default function Sidebar({
                   }}
                   referrerPolicy="no-referrer"
                 />
-                {participant.online && (
+                {(participant.online || onlineUsers.has(participant.id)) && (
                   <span
                     style={{
                       position: 'absolute',
@@ -288,7 +306,7 @@ export default function Sidebar({
                     )}
                   </div>
                   {lastMsg && (
-                    <span style={{ fontSize: '11px', color: '#6b7280', fontFamily: 'monospace', flexShrink: 0 }}>
+                    <span style={{ fontSize: '11px', color: conv.unreadCount > 0 ? '#00CFFF' : '#6b7280', fontFamily: 'monospace', flexShrink: 0, fontWeight: conv.unreadCount > 0 ? 600 : 400 }}>
                       {new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   )}
@@ -298,12 +316,13 @@ export default function Sidebar({
                   <p
                     style={{
                       fontSize: '12px',
-                      color: '#6b7280',
+                      color: conv.unreadCount > 0 ? '#d1d5db' : '#6b7280',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
                       flex: 1,
                       margin: 0,
+                      fontWeight: conv.unreadCount > 0 ? 600 : 400,
                     }}
                   >
                     {lastMsg ? lastMsg.text : 'Ready to chat.'}
@@ -319,9 +338,11 @@ export default function Sidebar({
                           fontWeight: 700,
                           padding: '1px 7px',
                           borderRadius: '99px',
+                          minWidth: '18px',
+                          textAlign: 'center',
                         }}
                       >
-                        {conv.unreadCount}
+                        {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
                       </span>
                     )}
                   </div>

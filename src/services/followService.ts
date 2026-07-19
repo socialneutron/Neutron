@@ -19,10 +19,12 @@ export const followService = {
       await supabase.rpc('decrement_count', { table_name: 'users', column_name: 'following_count', row_id: followerId })
       return false
     } else {
-      await supabase.from('follows').insert({ follower_id: followerId, following_id: followingId })
+      const { error } = await supabase.from('follows').insert({ follower_id: followerId, following_id: followingId })
+      if (error && error.code === '23505') {
+        return false
+      }
       await supabase.rpc('increment_count', { table_name: 'users', column_name: 'followers_count', row_id: followingId })
       await supabase.rpc('increment_count', { table_name: 'users', column_name: 'following_count', row_id: followerId })
-      // Fire-and-forget notification
       notificationService.create(followingId, followerId, 'follow').catch(() => {})
       return true
     }
@@ -47,7 +49,7 @@ export const followService = {
       .order('created_at', { ascending: false })
       .range(from, from + limit - 1)
     if (error) return []
-    return (follows?.map(f => f.follower) || []) as any
+    return (follows?.map(f => f.follower) || []).filter(Boolean) as any
   },
 
   async getFollowing(userId: string, page = 0, limit = 50): Promise<User[]> {
@@ -59,6 +61,6 @@ export const followService = {
       .order('created_at', { ascending: false })
       .range(from, from + limit - 1)
     if (error) return []
-    return (follows?.map(f => f.following) || []) as any
+    return (follows?.map(f => f.following) || []).filter(Boolean) as any
   },
 }

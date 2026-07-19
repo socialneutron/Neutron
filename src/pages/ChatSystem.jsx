@@ -9,7 +9,7 @@ const C = {
   cyan: '#00D2FF', purple: '#7928CA',
 }
 
-export default function ChatSystem({ recipient, navigate, user }) {
+export default function ChatSystem({ recipient, navigate, user, navParams }) {
   const { avatar: globalAvatar, displayName: globalDisplayName } = useUserAvatar()
   const userAvatar = globalAvatar || user?.avatar_url || ''
   const userDisplayName = globalDisplayName || user?.display_name || 'User'
@@ -26,7 +26,7 @@ export default function ChatSystem({ recipient, navigate, user }) {
         </motion.div>
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
-        <ChatApp recipient={recipient} navigate={navigate} user={user} />
+        <ChatApp recipient={recipient} navigate={navigate} user={user} inquiry={navParams?.inquiry} />
       </div>
     </div>
   )

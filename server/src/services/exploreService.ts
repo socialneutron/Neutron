@@ -10,14 +10,11 @@ const SCORE_WEIGHTS = {
   repostWeight: 40,
 }
 
-const FRESHNESS_BOOST_MINUTES = 60
 const FRESHNESS_MAX_BOOST = 15
-const DIVERSITY_INTERVAL = 3
 const CANDIDATE_LIMIT = 5000
 const FILTERED_LIMIT = 500
 const RANKED_LIMIT = 100
 const PAGE_SIZE = 30
-const CACHE_TTL_MINUTES = 5
 
 export async function getExploreFeed(
   userId: string,
@@ -53,17 +50,15 @@ async function generateCandidates(
 
   if (interests.length > 0) {
     const topTags = interests.slice(0, 10).map(i => i.category)
-    const tagConditions = topTags.map((_, i) => {
-      params.push(topTags[i])
-      return `$${paramIdx++}`
-    })
-    conditions.push(`(p.tags && ARRAY[${tagConditions.join(',')}] OR EXISTS (SELECT 1 FROM post_tags pt WHERE pt.post_id = p.id AND pt.tag = ANY($${paramIdx - tagConditions.length}::varchar[])))`)
+    params.push(topTags)
+    conditions.push(`(p.tags && $${paramIdx}::varchar[] OR EXISTS (SELECT 1 FROM post_tags pt WHERE pt.post_id = p.id AND pt.tag = ANY($${paramIdx}::varchar[])))`)
+    paramIdx++
   }
 
   if (similarUserIds.length > 0) {
     const simPlaceholders = similarUserIds.map((_, i) => `$${paramIdx++}`)
     params.push(...similarUserIds)
-    conditions.push(`(p.author_id = ANY(ARRAY[${simPlaceholders.join(',')}]::uuid[]) OR ${conditions[conditions.length - 1]})`)
+    conditions.push(`p.author_id = ANY(ARRAY[${simPlaceholders.join(',')}]::uuid[])`)
   }
 
   conditions.push(`p.id NOT IN (SELECT post_id FROM explore_events WHERE user_id = $${paramIdx} AND event_type IN ('skip', 'unlike'))`)
@@ -177,7 +172,6 @@ async function applyDiversity(ranked: any[]): Promise<any[]> {
   if (ranked.length === 0) return ranked
 
   const result: any[] = []
-  const usedCategories = new Set<string>()
   const buckets: Record<string, any[]> = {}
 
   for (const post of ranked) {
@@ -190,7 +184,6 @@ async function applyDiversity(ranked: any[]): Promise<any[]> {
 
   const categories = Object.keys(buckets)
   let catIndex = 0
-  let remaining = ranked.length
 
   while (result.length < Math.min(ranked.length, RANKED_LIMIT)) {
     const cat = categories[catIndex % categories.length]
@@ -337,7 +330,6 @@ export async function searchExplore(queryText: string, userId: string, type?: st
   const results: any = { posts: [], users: [] }
 
   if (!type || type === 'posts' || type === 'all') {
-    const escaped = queryText.replace(/'/g, "''")
     results.posts = await queryMany(`
       SELECT p.id, p.title, p.body, p.image_url, p.tags, p.likes_count, p.comments_count,
         p.reposts_count, p.created_at,

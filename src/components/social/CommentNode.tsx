@@ -4,6 +4,7 @@ import { Heart, MessageCircle, Trash2 } from 'lucide-react'
 import { useSupabaseAuth } from '../../context/SupabaseAuthContext'
 import { likeService, commentService, notificationService } from '../../services'
 import type { CommentWithAuthor } from '../../types/database'
+import { timeAgo } from '@/lib/timeAgo'
 
 const C = {
   bg: '#05050A', card: '#090914', cardBdr: 'rgba(255,255,255,0.06)',
@@ -86,7 +87,7 @@ export default function CommentNode({
       setShowReplyInput(false)
       onReplyAdded?.(comment.id)
       if (postAuthorId !== user.id) {
-        await notificationService.create(postAuthorId, user.id, 'comment', postId, reply.id)
+        await notificationService.create(postAuthorId, user.id, 'reply', postId, reply.id)
       }
     }
     setSending(false)
@@ -123,15 +124,6 @@ export default function CommentNode({
     }
   }, [showReplies, replies.length, loadReplies])
 
-  const timeAgo = (date: string) => {
-    const diff = Date.now() - new Date(date).getTime()
-    const mins = Math.floor(diff / 60000)
-    if (mins < 60) return `${mins}m`
-    const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `${hrs}h`
-    return `${Math.floor(hrs / 24)}d`
-  }
-
   const avatarSize = isNested ? 28 : 34
   const avatarFontSize = isNested ? 10 : 12
   const nameFontSize = isNested ? 12 : 13
@@ -160,7 +152,7 @@ export default function CommentNode({
       }}>
         {/* Avatar */}
         <div
-          onClick={() => navigate('profile', { author: { name: comment.author?.display_name, handle: `@${comment.author?.username}`, avatar: comment.author?.avatar_url, verified: comment.author?.is_verified } })}
+          onClick={() => navigate('profile', { author: { id: comment.author_id, name: comment.author?.display_name, handle: `@${comment.author?.username}`, avatar: comment.author?.avatar_url, verified: comment.author?.is_verified } })}
           style={{
             width: avatarSize, height: avatarSize, borderRadius: '50%',
             background: comment.author?.avatar_url ? `url(${comment.author.avatar_url}) center/cover` : `linear-gradient(135deg, ${C.cyan}60, ${C.purple}60)`,
@@ -179,7 +171,7 @@ export default function CommentNode({
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             <span
               style={{ fontSize: nameFontSize, fontWeight: 700, color: C.text, cursor: 'pointer' }}
-              onClick={() => navigate('profile', { author: { name: comment.author?.display_name, handle: `@${comment.author?.username}` } })}
+              onClick={() => navigate('profile', { author: { id: comment.author_id, name: comment.author?.display_name, handle: `@${comment.author?.username}`, verified: comment.author?.is_verified } })}
             >
               {comment.author?.display_name}
             </span>

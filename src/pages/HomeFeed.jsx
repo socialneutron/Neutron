@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Plus, Bell, TrendingUp, Hash, Zap, Globe, Cpu, Rocket, FlaskConical, BarChart3, X, ArrowRight, Send } from 'lucide-react'
+import { Search, Plus, Bell, TrendingUp, Hash, X, Send } from 'lucide-react'
 import { useSupabaseAuth } from '../context/SupabaseAuthContext'
 import { useFeedStore } from '../stores/feedStore'
 import { useNotificationStore } from '../stores/notificationStore'
 import { useUserAvatar } from '../stores/userAvatarStore'
-import { postService, notificationService } from '../services'
+import { feedService, notificationService, postService } from '../services'
 import PostCard from '../components/social/PostCard'
+import { useToast } from '../components/ToastNotification'
 
 const C = {
   bg: '#05050A', card: '#090914', cardBdr: 'rgba(255,255,255,0.06)',
@@ -20,50 +21,76 @@ const TRENDING_TAGS = ['#DigitalAssets', '#NFTs', '#DeFi', '#Web3', '#Blockchain
 
 export default function HomeFeed({ navigate, user, sharedAssetData, onClearAssetData }) {
   const { user: supaUser } = useSupabaseAuth()
-  const { posts, loading, loadMore, refresh } = useFeedStore()
+  const { posts, loading, loadMore, refresh, feedType, setFeedType } = useFeedStore()
   const { unreadCount, incrementUnread, setUnreadCount } = useNotificationStore()
   const { avatar: globalAvatar, displayName: globalName } = useUserAvatar()
-  const [feedType, setFeedType] = useState('for_you')
+  const { addToast } = useToast()
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState('All')
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [postingComment, setPostingComment] = useState(false)
+  const [error, setError] = useState(null)
+  const [pullDistance, setPullDistance] = useState(0)
   const observerRef = useRef(null)
   const loadMoreRef = useRef(null)
   const hasLoadedOnce = useRef(false)
+  const scrollContainerRef = useRef(null)
+  const touchStartY = useRef(null)
+  const isRefreshing = useRef(false)
 
   const currentUser = supaUser || user
 
+  const stableUserId = currentUser?.id
+
   useEffect(() => {
-    refresh(currentUser?.id)?.catch(() => {})
+    if (!stableUserId) return
+    setError(null)
+    refresh(stableUserId).catch((err) => {
+      console.error('Failed to refresh feed:', err)
+      setError('Failed to load feed')
+    })
     hasLoadedOnce.current = true
-  }, [refresh, currentUser?.id])
+  }, [refresh, stableUserId])
 
   useEffect(() => {
     if (!currentUser) return
-    const channel = notificationService.subscribe(currentUser.id, () => { incrementUnread() })
+    const channel = notificationService.subscribe(currentUser.id, (notification) => { incrementUnread(); addToast(notification) })
     notificationService.getUnreadCount(currentUser.id).then(setUnreadCount)
     return () => { channel.unsubscribe() }
-  }, [currentUser, incrementUnread, setUnreadCount])
+  }, [currentUser, incrementUnread, setUnreadCount, addToast])
 
   useEffect(() => {
     if (!loadMoreRef.current) return
+    const el = loadMoreRef.current
     observerRef.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && !loading) loadMore(currentUser?.id)
+      if (entries[0].isIntersecting && !loading) {
+        loadMore(currentUser?.id).catch((err) => {
+          console.error('Failed to load more posts:', err)
+          setError('Failed to load more posts')
+        })
+      }
     }, { threshold: 0.1 })
-    observerRef.current.observe(loadMoreRef.current)
+    observerRef.current.observe(el)
     return () => observerRef.current?.disconnect()
   }, [loading, loadMore, currentUser?.id])
+
+  useEffect(() => {
+    if (!loadMoreRef.current || loading) return
+    if (observerRef.current && loadMoreRef.current) {
+      observerRef.current.observe(loadMoreRef.current)
+    }
+  }, [loading])
 
   const handleSearch = useCallback(async (q) => {
     if (!q.trim()) { setSearchResults([]); setSearching(false); return }
     setSearching(true)
     try {
-      const results = await postService.search(q)
-      setSearchResults(results)
-    } catch {
+      const results = await feedService.searchExplore(q)
+      setSearchResults(results.posts || [])
+    } catch (err) {
+      console.error('Search failed:', err)
       setSearchResults([])
     }
     setSearching(false)
@@ -74,16 +101,53 @@ export default function HomeFeed({ navigate, user, sharedAssetData, onClearAsset
     return () => clearTimeout(timer)
   }, [searchQuery, handleSearch])
 
-  const filtered = activeCategory === 'All' ? posts : posts.filter(p => p.category === activeCategory)
-  const scored = feedType === 'for_you' ? [...filtered].sort((a, b) => {
-    const scoreA = (a.likes_count || 0) * 2 + (a.comments_count || 0) * 3 + (a.reposts_count || 0) * 4 - (Date.now() - new Date(a.created_at).getTime()) / 3600000
-    const scoreB = (b.likes_count || 0) * 2 + (b.comments_count || 0) * 3 + (b.reposts_count || 0) * 4 - (Date.now() - new Date(b.created_at).getTime()) / 3600000
-    return scoreB - scoreA
-  }) : filtered
-  const displayed = searchQuery ? searchResults : scored
+  const filtered = useMemo(() => {
+    if (activeCategory === 'All') return posts
+    return posts.filter(p => p.tags?.includes(activeCategory) || p.category === activeCategory)
+  }, [posts, activeCategory])
 
-  const displayName = globalName || currentUser?.username || currentUser?.user_metadata?.display_name || 'Pratham'
+  const displayed = searchQuery ? searchResults : filtered
+
+  const displayName = globalName || currentUser?.username || currentUser?.user_metadata?.display_name || 'User'
   const avatar = globalAvatar || currentUser?.avatar || currentUser?.user_metadata?.avatar_url || ''
+
+  const handleRefresh = useCallback(() => {
+    if (isRefreshing.current) return
+    isRefreshing.current = true
+    setError(null)
+    refresh(stableUserId).catch((err) => {
+      console.error('Failed to refresh feed:', err)
+      setError('Failed to refresh feed')
+    }).finally(() => {
+      isRefreshing.current = false
+      setPullDistance(0)
+    })
+  }, [refresh, stableUserId])
+
+  const handleTouchStart = useCallback((e) => {
+    if (scrollContainerRef.current && scrollContainerRef.current.scrollTop === 0) {
+      touchStartY.current = e.touches[0].clientY
+    } else {
+      touchStartY.current = null
+    }
+  }, [])
+
+  const handleTouchMove = useCallback((e) => {
+    if (touchStartY.current === null) return
+    const diff = e.touches[0].clientY - touchStartY.current
+    if (diff > 0) {
+      setPullDistance(Math.min(diff * 0.5, 120))
+    }
+  }, [])
+
+  const handleTouchEnd = useCallback(() => {
+    if (pullDistance > 80) {
+      handleRefresh()
+    } else {
+      setPullDistance(0)
+    }
+    touchStartY.current = null
+  }, [pullDistance, handleRefresh])
 
   const handlePostComment = useCallback(async () => {
     if (!currentUser || !commentText.trim() || !sharedAssetData) return
@@ -101,12 +165,36 @@ export default function HomeFeed({ navigate, user, sharedAssetData, onClearAsset
         onClearAssetData?.()
         refresh(currentUser.id)
       }
-    } catch {}
+    } catch (err) {
+      console.error('Failed to post comment:', err)
+    }
     setPostingComment(false)
   }, [currentUser, commentText, sharedAssetData, onClearAssetData, refresh])
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 88 }}>
+    <div
+      ref={scrollContainerRef}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      style={{ minHeight: '100vh', background: C.bg, paddingBottom: 88, position: 'relative' }}
+    >
+      {/* Pull to refresh indicator */}
+      <motion.div
+        animate={{ height: pullDistance > 0 ? Math.min(pullDistance, 80) : 0, opacity: pullDistance > 20 ? 1 : 0 }}
+        transition={{ duration: 0.15 }}
+        style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}
+      >
+        <motion.div
+          animate={{ rotate: pullDistance > 80 ? 360 : (pullDistance / 80) * 360 }}
+          transition={{ duration: 0.15 }}
+          style={{ width: 20, height: 20, border: '2px solid rgba(255,255,255,0.1)', borderTopColor: C.cyan, borderRadius: '50%' }}
+        />
+        <span style={{ fontSize: 12, color: C.muted, marginLeft: 8 }}>
+          {pullDistance > 80 ? 'Release to refresh' : 'Pull to refresh'}
+        </span>
+      </motion.div>
+
       {/* Top Bar */}
       <div style={{ position: 'sticky', top: 0, zIndex: 100, background: `${C.bg}ee`, backdropFilter: 'blur(12px)', padding: '14px 18px', borderBottom: `1px solid ${C.cardBdr}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -185,7 +273,7 @@ export default function HomeFeed({ navigate, user, sharedAssetData, onClearAsset
       {/* Feed type toggle */}
       <div style={{ display: 'flex', gap: 0, padding: '8px 18px 4px' }}>
         {[
-          { id: 'for_you', label: 'For You' },
+          { id: 'forYou', label: 'For You' },
           { id: 'following', label: 'Following' },
         ].map(t => (
           <button key={t.id} onClick={() => setFeedType(t.id)}
@@ -219,6 +307,26 @@ export default function HomeFeed({ navigate, user, sharedAssetData, onClearAsset
         <div style={{ padding: '8px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <p style={{ margin: 0, fontSize: 13, color: C.muted }}>Showing results for "<span style={{ color: C.cyan }}>{searchQuery}</span>"</p>
           <span style={{ fontSize: 12, color: C.muted }}>{displayed.length} found</span>
+        </div>
+      )}
+
+      {/* Searching indicator */}
+      {searching && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 18px', gap: 8 }}>
+          <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+            style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.1)', borderTopColor: C.cyan, borderRadius: '50%' }} />
+          <span style={{ fontSize: 12, color: C.muted }}>Searching...</span>
+        </div>
+      )}
+
+      {/* Error state */}
+      {error && (
+        <div style={{ margin: '10px 18px', padding: '14px 16px', borderRadius: 12, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 13, color: '#f87171' }}>{error}</span>
+          <motion.button whileTap={{ scale: 0.95 }} onClick={handleRefresh}
+            style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: 'rgba(239,68,68,0.15)', color: '#f87171', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            Retry
+          </motion.button>
         </div>
       )}
 

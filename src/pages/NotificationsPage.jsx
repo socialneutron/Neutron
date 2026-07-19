@@ -4,6 +4,7 @@ import { ArrowLeft, Heart, MessageCircle, UserPlus, Repeat2, Bell, Check } from 
 import { useSupabaseAuth } from '../context/SupabaseAuthContext'
 import { notificationService } from '../services'
 import { useNotificationStore } from '../stores/notificationStore'
+import { timeAgo } from '@/lib/timeAgo'
 
 const C = {
   bg: '#05050A', card: '#090914', cardBdr: 'rgba(255,255,255,0.06)',
@@ -41,18 +42,6 @@ export default function NotificationsPage({ navigate }) {
 
   useEffect(() => { load() }, [load])
 
-  const timeAgo = (date) => {
-    const diff = Date.now() - new Date(date).getTime()
-    const mins = Math.floor(diff / 60000)
-    if (mins < 1) return 'just now'
-    if (mins < 60) return `${mins}m ago`
-    const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `${hrs}h ago`
-    const days = Math.floor(hrs / 24)
-    if (days === 1) return 'yesterday'
-    return `${days}d ago`
-  }
-
   const getMessage = (n) => {
     const name = n.actor?.display_name || 'Someone'
     return `${name} ${labelMap[n.type] || 'interacted with you'}`
@@ -63,7 +52,7 @@ export default function NotificationsPage({ navigate }) {
       navigate('post', { postId: n.post_id })
     } else if (n.actor_id) {
       const actor = n.actor
-      if (actor) navigate('profile', { author: { name: actor.display_name, handle: `@${actor.username}`, avatar: actor.avatar_url, verified: actor.is_verified } })
+      if (actor) navigate('profile', { author: { id: n.actor_id, name: actor.display_name, handle: `@${actor.username}`, avatar: actor.avatar_url, verified: actor.is_verified } })
     }
   }
 

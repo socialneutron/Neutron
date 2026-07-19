@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Bot, Send, Key, Loader2 } from 'lucide-react'
+import { Bot, Send, Key, Loader2, Wand2 } from 'lucide-react'
 
 const API_URL = 'https://api.deepseek.com/v1/chat/completions'
 const STORAGE_KEY = 'deepseek_api_key'
@@ -16,7 +16,38 @@ const C = {
   muted: '#6b7280',
 }
 
-const SYSTEM_PROMPT = `You are a workflow and business process design assistant integrated into a visual flowchart tool. You help users design, optimize, and document business workflows. You can suggest process improvements, explain BPMN concepts, help with node configuration (cost, duration, department assignments), and provide best practices. Keep responses concise and actionable.`
+const SYSTEM_PROMPT = `You are a workflow design assistant that can BOTH advise AND directly modify the user's workflow.
+
+You can suggest improvements and ALSO perform actions. When performing actions, respond with BOTH a human-readable message AND a JSON action block.
+
+ACTION FORMAT (put inside <ACTION> tags):
+<ACTION>{"type":"add_node","text":"Step Name","shape":"rectangle","duration":"5d","cost":"1000","department":"engineering"}</ACTION>
+<ACTION>{"type":"edit_node","id":"3","text":"New Text","duration":"2d"}</ACTION>
+<ACTION>{"type":"delete_node","id":"5"}</ACTION>
+<ACTION>{"type":"add_connection","from":"1","to":"2","fromPort":"bottom","toPort":"top","label":""}</ACTION>
+<ACTION>{"type":"delete_connection","from":"1","to":"2"}</ACTION>
+<ACTION>{"type":"set_duration","id":"3","duration":"5d"}</ACTION>
+<ACTION>{"type":"set_cost","id":"3","cost":"5000"}</ACTION>
+<ACTION>{"type":"set_department","id":"3","department":"engineering"}</ACTION>
+
+Available shapes: rectangle (Process), parallelogram (I/O), diamond (Decision), circle (End).
+Available departments: engineering, marketing, sales, hr, finance, operations.
+Available integrations: google, gmail, slack, stripe, hubspot, zapier.
+
+Multiple actions can be chained. Keep messages concise. Always include the ACTION tags when modifying the workflow.`
+
+function parseActions(text) {
+  const actions = []
+  const actionRegex = /<ACTION>([\s\S]*?)<\/ACTION>/g
+  let match
+  while ((match = actionRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1].trim())
+      actions.push(parsed)
+    } catch { /* ignore malformed */ }
+  }
+  return actions
+}
 
 function loadHistory() {
   try {
@@ -29,7 +60,7 @@ function saveHistory(msgs) {
   try { localStorage.setItem(CHAT_KEY, JSON.stringify(msgs.slice(-50))) } catch { /* ignore */ }
 }
 
-export default function WorkflowChat({ tags, connections }) {
+export default function WorkflowChat({ tags, connections, onApplyActions }) {
   const [messages, setMessages] = useState(loadHistory)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -38,6 +69,7 @@ export default function WorkflowChat({ tags, connections }) {
     return stored.startsWith('sk-') ? stored : ''
   })
   const [showKeyInput, setShowKeyInput] = useState(!apiKey)
+  const [lastActions, setLastActions] = useState([])
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -64,10 +96,8 @@ export default function WorkflowChat({ tags, connections }) {
 
     setInput('')
     const userMsg = { role: 'user', content: text }
-    const contextMsg = tags?.length ? {
-      role: 'system',
-      content: `Current workflow has ${tags.length} nodes and ${connections?.length || 0} connections. Nodes: ${tags.map(t => `${t.text} (${t.shape}, cost:$${t.cost || 0}, duration:${t.duration || 'none'}, dept:${t.department || 'none'})`).join('; ')}`
-    } : null
+
+    const workflowContext = tags?.length ? `\n\nCurrent workflow state:\n- ${tags.length} nodes, ${connections?.length || 0} connections\n- Nodes: ${tags.map(t => `[${t.id}] "${t.text}" (${t.shape}, dept:${t.department || 'none'}, cost:$${t.cost || 0}, dur:${t.duration || 'none'})`).join('\n- ')}\n- Connections: ${connections?.map(c => `[${c.from}]-->[${c.to}] "${c.label || ''}"`).join(', ') || 'none'}` : ''
 
     const history = [...messages, userMsg]
     setMessages(prev => [...prev, userMsg])
@@ -76,11 +106,10 @@ export default function WorkflowChat({ tags, connections }) {
     const body = {
       model: 'deepseek-chat',
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...(contextMsg ? [contextMsg] : []),
+        { role: 'system', content: SYSTEM_PROMPT + workflowContext },
         ...history.slice(-20),
       ],
-      max_tokens: 1024,
+      max_tokens: 1500,
       temperature: 0.7,
     }
 
@@ -95,29 +124,36 @@ export default function WorkflowChat({ tags, connections }) {
         const errBody = await res.text()
         const isAuth = errBody.toLowerCase().includes('authentication') || errBody.toLowerCase().includes('unauthorized') || errBody.toLowerCase().includes('invalid api')
         if (isAuth) throw new Error('__AUTH__')
-        throw new Error(`API error (${res.status}): please try again later.`)
+        throw new Error(`API error (${res.status})`)
       }
 
       const data = await res.json()
       const reply = data.choices?.[0]?.message?.content || 'No response'
-      const assistantMsg = { role: 'assistant', content: reply }
+
+      const actions = parseActions(reply)
+      const cleanReply = reply.replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').trim()
+
+      const assistantMsg = { role: 'assistant', content: cleanReply || reply }
       setMessages(prev => [...prev, assistantMsg])
       saveHistory([...history, assistantMsg])
+
+      if (actions.length > 0 && onApplyActions) {
+        setLastActions(actions)
+        onApplyActions(actions)
+      }
     } catch (err) {
       const msg = err.message
       let displayMsg
       if (msg === '__AUTH__') {
-        displayMsg = 'Authentication failed. Your DeepSeek API key is invalid or expired. Please update it in the input above.'
-      } else if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('network') || msg.includes('timeout') || msg.includes('abort')) {
-        displayMsg = 'Unable to connect to assistant. Please check your network connection.'
+        displayMsg = 'Authentication failed. Your DeepSeek API key is invalid or expired.'
       } else {
-        displayMsg = `Unable to connect to assistant. Please check your network connection.`
+        displayMsg = 'Unable to connect to assistant. Check your network connection.'
       }
       setMessages(prev => [...prev, { role: 'assistant', content: displayMsg }])
     } finally {
       setLoading(false)
     }
-  }, [input, loading, apiKey, messages, tags, connections])
+  }, [input, loading, apiKey, messages, tags, connections, onApplyActions])
 
   const clearChat = useCallback(() => {
     setMessages([])
@@ -135,8 +171,13 @@ export default function WorkflowChat({ tags, connections }) {
           <Bot size={12} color={C.purple} />
         </div>
         <span style={{ fontSize: 11, fontWeight: 700, color: C.text, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
-          AI Workflow Assistant
+          AI Assistant
         </span>
+        {onApplyActions && (
+          <span style={{ fontSize: 8, color: C.green, background: C.green + '15', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+            CAN EDIT
+          </span>
+        )}
       </div>
 
       {/* API Key input */}
@@ -175,7 +216,7 @@ export default function WorkflowChat({ tags, connections }) {
         </div>
       )}
 
-      {/* Messages — scrollable area */}
+      {/* Messages */}
       <div style={{
         flex: 1, overflowY: 'auto', minHeight: 0,
         display: 'flex', flexDirection: 'column', gap: 6,
@@ -184,9 +225,13 @@ export default function WorkflowChat({ tags, connections }) {
       }}>
         {messages.length === 0 ? (
           <div style={{ padding: '16px 0', textAlign: 'center', color: C.muted, fontSize: 10, lineHeight: 1.6 }}>
-            <Bot size={22} style={{ opacity: 0.15, marginBottom: 4 }} />
-            <div>Ask about workflow design,</div>
-            <div>process optimization, or BPMN</div>
+            <Wand2 size={22} style={{ opacity: 0.15, marginBottom: 4 }} />
+            <div style={{ marginBottom: 4 }}>Ask me to design or modify your workflow</div>
+            <div style={{ fontSize: 8, opacity: 0.5 }}>
+              e.g. "Add a testing step after Build"<br/>
+              "Set all engineering costs to 5000"<br/>
+              "Create a complete CI/CD pipeline"
+            </div>
           </div>
         ) : (
           messages.map((msg, i) => (
@@ -225,7 +270,7 @@ export default function WorkflowChat({ tags, connections }) {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-          placeholder="Ask about your workflow..."
+          placeholder="Ask or instruct..."
           style={{
             flex: 1, padding: '6px 9px', borderRadius: 7, border: `1px solid ${C.cardBdr}`,
             background: 'rgba(255,255,255,0.03)', color: C.text, fontSize: 10,
@@ -244,14 +289,9 @@ export default function WorkflowChat({ tags, connections }) {
         </button>
       </div>
 
-      {/* Clear button */}
       {messages.length > 0 && (
         <button onClick={clearChat}
-          style={{
-            padding: '2px 0', borderRadius: 4, border: 'none',
-            background: 'none', color: C.muted, fontSize: 8, cursor: 'pointer', textAlign: 'left',
-          }}
-        >
+          style={{ padding: '2px 0', borderRadius: 4, border: 'none', background: 'none', color: C.muted, fontSize: 8, cursor: 'pointer', textAlign: 'left' }}>
           Clear chat
         </button>
       )}

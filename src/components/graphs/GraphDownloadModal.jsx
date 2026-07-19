@@ -54,11 +54,9 @@ export default function GraphDownloadModal({ isOpen, onClose, graph }) {
     }
   }
 
-  if (!isOpen) return null;
-
   return (
     <AnimatePresence>
-      {isOpen && (
+      {!isOpen ? null : (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

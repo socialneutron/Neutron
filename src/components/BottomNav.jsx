@@ -15,7 +15,7 @@ const RIGHT_ITEMS = [
 
 const CREATE_ITEM = { id: 'create', label: '', icon: Plus, special: true }
 
-function NavItem({ item, isActive, navigate }) {
+function NavItem({ item, isActive, navigate, badge }) {
   const Icon = item.icon
   return (
     <button
@@ -26,18 +26,19 @@ function NavItem({ item, isActive, navigate }) {
       <span className="nav-icon-wrap">
         <Icon size={22}/>
         {isActive && <span className="nav-active-dot"/>}
+        {badge > 0 && <span className="nav-badge">{badge > 99 ? '99+' : badge}</span>}
       </span>
       <span className="nav-label">{item.label}</span>
     </button>
   )
 }
 
-export default function BottomNav({ currentPage, navigate }) {
+export default function BottomNav({ currentPage, navigate, unreadCount = 0, hidden = false }) {
   return (
-    <nav className="bottom-nav" id="bottom-nav">
+    <nav className={`bottom-nav${hidden ? ' nav-hidden' : ''}`} id="bottom-nav">
       <div className="nav-group nav-group-left">
         {LEFT_ITEMS.map(item => (
-          <NavItem key={item.id} item={item} isActive={currentPage === item.id} navigate={navigate} />
+          <NavItem key={item.id} item={item} isActive={currentPage === item.id} navigate={navigate} badge={item.id === 'chat' ? unreadCount : 0} />
         ))}
       </div>
 

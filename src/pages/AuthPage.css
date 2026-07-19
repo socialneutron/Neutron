@@ -649,6 +649,65 @@
 }
 
 /* ════════════════════════════════════════
+   CENTERED ANIMATED LOGO
+   ════════════════════════════════════════ */
+.auth-hero-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+  gap: 0;
+  position: relative;
+  z-index: 2;
+  max-width: 560px;
+}
+
+.auth-hero-logo-wrap {
+  position: absolute;
+  top: 40px;
+  left: 60px;
+  z-index: 3;
+}
+
+.auth-hero-centered-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+/* ════════════════════════════════════════
+   MODAL OVERLAY (Forgot Password / Verify Email)
+   ════════════════════════════════════════ */
+.auth-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.auth-modal-card {
+  width: 100%;
+  max-width: 400px;
+  background: rgba(15, 10, 30, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+
+/* ════════════════════════════════════════
    RESPONSIVE
    ════════════════════════════════════════ */
 @media (max-width: 900px) {

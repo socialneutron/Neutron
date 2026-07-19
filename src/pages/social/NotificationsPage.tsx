@@ -5,6 +5,7 @@ import { useSupabaseAuth } from '../../context/SupabaseAuthContext'
 import { notificationService } from '../../services'
 import { useNotificationStore } from '../../stores/notificationStore'
 import type { Notification } from '../../types/database'
+import { timeAgo } from '@/lib/timeAgo'
 
 const C = {
   bg: '#05050A', card: '#090914', cardBdr: 'rgba(255,255,255,0.06)',
@@ -45,15 +46,6 @@ export default function NotificationsPage({ navigate }: NotificationsPageProps) 
   }, [user, markAllRead])
 
   useEffect(() => { load().catch(() => {}) }, [load])
-
-  const timeAgo = (date: string) => {
-    const diff = Date.now() - new Date(date).getTime()
-    const mins = Math.floor(diff / 60000)
-    if (mins < 60) return `${mins}m ago`
-    const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `${hrs}h ago`
-    return `${Math.floor(hrs / 24)}d ago`
-  }
 
   const getMessage = (n: Notification) => {
     const name = (n.actor as any)?.display_name || 'Someone'

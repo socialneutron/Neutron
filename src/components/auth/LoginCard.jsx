@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, EyeOff, Shield, Mail, Lock, TrendingUp, Globe, MessageCircle } from 'lucide-react'
-import { loginUser } from '../../services/authService'
+import { useSupabaseAuth } from '../../context/SupabaseAuthContext'
 
 const METRICS = [
   { value: '2.4M+', label: 'Discussions' },
@@ -26,6 +26,7 @@ const OAUTH_PROVIDERS = [
 ]
 
 export default function LoginCard({ onNavigate, onSuccess }) {
+  const { signIn, signInWithGoogle, signInWithGitHub, signInWithApple, signInWithMicrosoft } = useSupabaseAuth()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -41,25 +42,30 @@ export default function LoginCard({ onNavigate, onSuccess }) {
     if (!identifier.trim() || !password) return
     setLoading(true)
     setError('')
-    try {
-      const result = await loginUser(identifier.trim(), password)
-      if (result.requires2FA) {
-        onNavigate('2fa', { userId: result.user.id })
-      } else {
-        onSuccess(result.user)
-      }
-    } catch (err) {
-      if (err.message === 'EMAIL_NOT_VERIFIED') {
-        onNavigate('verify', { email: identifier.includes('@') ? identifier : '' })
-      } else {
-        setError(err.message)
-      }
+    const result = await signIn(identifier.trim(), password)
+    if (result.error) {
+      setError(result.error)
+      setLoading(false)
+      return
+    }
+    if (result.requires2FA) {
+      onNavigate('2fa', { userId: result.userId })
+      setLoading(false)
+      return
     }
     setLoading(false)
   }
 
-  const handleOAuth = (provider) => {
-    console.log(`[OAuth] ${provider} login clicked`)
+  const handleOAuth = async (provider) => {
+    setLoading(true)
+    setError('')
+    let r
+    if (provider === 'google') r = await signInWithGoogle()
+    else if (provider === 'github') r = await signInWithGitHub()
+    else if (provider === 'apple') r = await signInWithApple()
+    else if (provider === 'microsoft') r = await signInWithMicrosoft()
+    if (r && r.error) setError(r.error)
+    setLoading(false)
   }
 
   return (

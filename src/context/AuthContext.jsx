@@ -6,6 +6,7 @@ import { auth, db } from '../firebase'
 const DEFAULT_PROFILE = {
   uid: 'local_default',
   username: 'Pratham',
+  displayName: 'Pratham',
   handle: '@Pratham',
   email: 'pratham@neutron.app',
   bio: 'Global macro analyst · AI researcher · Exploring the intersection of technology, geopolitics and finance. Building the future one thread at a time.',
@@ -46,6 +47,7 @@ export function AuthProvider({ children }) {
                 ...DEFAULT_PROFILE,
                 ...data,
                 uid: firebaseUser.uid,
+                displayName: data.displayName || data.username || firebaseUser.displayName || DEFAULT_PROFILE.displayName,
               })
             } else {
               setUser({
@@ -53,6 +55,7 @@ export function AuthProvider({ children }) {
                 uid: firebaseUser.uid,
                 email: firebaseUser.email || DEFAULT_PROFILE.email,
                 username: firebaseUser.displayName || DEFAULT_PROFILE.username,
+                displayName: firebaseUser.displayName || DEFAULT_PROFILE.displayName,
               })
             }
             setLoading(false)
@@ -63,6 +66,7 @@ export function AuthProvider({ children }) {
               uid: firebaseUser.uid,
               email: firebaseUser.email || DEFAULT_PROFILE.email,
               username: firebaseUser.displayName || DEFAULT_PROFILE.username,
+              displayName: firebaseUser.displayName || DEFAULT_PROFILE.displayName,
             })
             setLoading(false)
           }

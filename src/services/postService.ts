@@ -34,8 +34,9 @@ async function resolveAuthor(post: any): Promise<User> {
 }
 
 async function ensureUserExists(userId: string, displayName?: string, username?: string, avatarUrl?: string) {
-  const { data: existing } = await supabase.from('users').select('id').eq('id', userId).maybeSingle()
+  const { data: existing } = await supabase.from('users').select('id, username, display_name').eq('id', userId).maybeSingle()
   if (!existing) {
+    // Only insert if user doesn't exist at all
     const uname = username || displayName?.toLowerCase().replace(/\s+/g, '_') || 'user'
     await supabase.from('users').insert({
       id: userId,
@@ -54,27 +55,44 @@ async function ensureUserExists(userId: string, displayName?: string, username?:
       updated_at: new Date().toISOString(),
     })
   }
+  // Do NOT overwrite existing user profiles with Guest data
 }
 
 export const postService = {
   async create(authorId: string, data: {
     title: string; body?: string; category?: string; category_color?: string;
-    tags?: string[]; image_url?: string; location?: string;
+    tags?: string[]; image_url?: string; images?: string[]; location?: string;
     visibility?: 'public' | 'private' | 'followers';
     author_username?: string; author_display_name?: string; author_avatar?: string;
+    is_repost?: boolean; repost_of?: string;
   }): Promise<Post | null> {
+    // Skip media upload for base64 data URLs (stored directly in posts.images)
     let mediaId: string | null = null
-    if (data.image_url) {
-      mediaId = await mediaService.upload(authorId, 'image/jpeg', data.image_url, { size: 0 })
-    }
-    await ensureUserExists(authorId, data.author_display_name, data.author_username, data.author_avatar)
 
-    const { data: maxRow } = await supabase.from('posts').select('post_code').order('post_code', { ascending: false }).limit(1).maybeSingle()
-    const nextCode = (maxRow?.post_code || 0) + 1
+    let authorUsername = data.author_username || ''
+    let authorDisplayName = data.author_display_name || ''
+    let authorAvatar = data.author_avatar || ''
+
+    // Parallel: look up real user if needed + ensure user exists
+    if (!authorUsername || /^Guest_/.test(authorUsername)) {
+      const { data: realUser } = await supabase.from('users').select('username, display_name, avatar_url').eq('id', authorId).maybeSingle()
+      if (realUser) {
+        authorUsername = realUser.username || authorUsername
+        authorDisplayName = realUser.display_name || authorDisplayName
+        authorAvatar = realUser.avatar_url || authorAvatar
+      }
+    }
+
+    // Only ensure user exists if we don't have a valid username
+    if (!authorUsername || /^Guest_/.test(authorUsername)) {
+      await ensureUserExists(authorId, authorDisplayName, authorUsername, authorAvatar)
+    }
+
+    const allImages = data.images || (data.image_url ? [data.image_url] : [])
+
     const { data: post, error } = await supabase
       .from('posts')
       .insert({
-        post_code: nextCode,
         author_id: authorId,
         media_id: mediaId,
         title: data.title,
@@ -83,18 +101,21 @@ export const postService = {
         category_color: data.category_color || '',
         tags: data.tags || ['General'],
         image_url: data.image_url || '',
+        images: allImages,
         location: data.location || '',
         visibility: data.visibility || 'public',
-        author_username: data.author_username || '',
-        author_display_name: data.author_display_name || '',
-        author_avatar: data.author_avatar || '',
+        author_username: authorUsername,
+        author_display_name: authorDisplayName,
+        author_avatar: authorAvatar,
+        is_repost: data.is_repost || false,
+        repost_of: data.repost_of || null,
       })
       .select('*, author:users!posts_author_id_fkey(*)')
       .single()
     if (error) return null
-    const author = await resolveAuthor(post)
+    const author = post.author?.username ? post.author : await resolveAuthor(post)
     const result = { ...post, author } as PostWithAuthor
-    await supabase.rpc('increment_count', { table_name: 'users', column_name: 'posts_count', row_id: authorId })
+    supabase.rpc('increment_count', { table_name: 'users', column_name: 'posts_count', row_id: authorId }).catch(() => {})
     return result
   },
 
@@ -106,7 +127,7 @@ export const postService = {
       .single()
     if (error) return null
 
-    const author = await resolveAuthor(post)
+    const author = post.author?.username ? post.author : await resolveAuthor(post)
     const result: PostWithAuthor = { ...post, author }
 
     if (userId) {
@@ -124,17 +145,28 @@ export const postService = {
 
   async getFeed(page = 0, limit = 20, userId?: string, verifiedOnly = false): Promise<PostWithAuthor[]> {
     const from = page * limit
-    const { data: posts, error } = await supabase
+    let query = supabase
       .from('posts')
       .select('*, author:users!posts_author_id_fkey(*)')
       .order('created_at', { ascending: false })
       .range(from, from + limit - 1)
+
+    if (userId) {
+      query = query.or(`visibility.eq.public,and(visibility.eq.followers,author_id.eq.${userId}),author_id.eq.${userId}`)
+    } else {
+      query = query.eq('visibility', 'public')
+    }
+
+    const { data: posts, error } = await query
     if (error) return []
     if (!posts?.length) return []
 
-    let resolved = await Promise.all(posts.map(async p => ({ ...p, author: await resolveAuthor(p) }))) as PostWithAuthor[]
-    if (verifiedOnly) resolved = filterVerifiedOnly(resolved)
+    const resolved = posts.map(p => {
+      if (p.author && p.author.username) return p
+      return { ...p, author: fallbackAuthor(p) }
+    }) as PostWithAuthor[]
 
+    if (verifiedOnly) return filterVerifiedOnly(resolved)
     if (!userId) return resolved
 
     const postIds = resolved.map(p => p.id)
@@ -166,7 +198,7 @@ export const postService = {
       .range(from, from + limit - 1)
     if (error) return []
     if (!data?.length) return []
-    let results = await Promise.all(data.map(async p => ({ ...p, author: await resolveAuthor(p) }))) as PostWithAuthor[]
+    let results = data.map(p => p.author?.username ? p : { ...p, author: fallbackAuthor(p) }) as PostWithAuthor[]
     if (verifiedOnly) results = filterVerifiedOnly(results)
     return results
   },
@@ -177,12 +209,21 @@ export const postService = {
       .delete()
       .eq('id', postId)
       .eq('author_id', userId)
-    if (!error) await supabase.rpc('decrement_count', { table_name: 'users', column_name: 'posts_count', row_id: userId })
+    if (!error) {
+      await Promise.all([
+        supabase.from('likes').delete().eq('post_id', postId),
+        supabase.from('comments').delete().eq('post_id', postId),
+        supabase.from('bookmarks').delete().eq('post_id', postId),
+        supabase.from('reposts').delete().eq('post_id', postId),
+        supabase.from('notifications').delete().eq('post_id', postId),
+        supabase.rpc('decrement_count', { table_name: 'users', column_name: 'posts_count', row_id: userId }),
+      ])
+    }
     return !error
   },
 
   async getEngagementFeed(page = 0, limit = 20, userId?: string): Promise<PostWithAuthor[]> {
-    const allPosts = await this.getFeed(0, 100, userId)
+    const allPosts = await this.getFeed(0, 50, userId)
     const scored = allPosts.map(p => {
       const likes = p.likes_count || 0
       const comments = p.comments_count || 0
@@ -207,7 +248,7 @@ export const postService = {
       .range(from, from + limit - 1)
     if (error) return []
     if (!data?.length) return []
-    let results = await Promise.all(data.map(async p => ({ ...p, author: await resolveAuthor(p) }))) as PostWithAuthor[]
+    let results = data.map(p => p.author?.username ? p : { ...p, author: fallbackAuthor(p) }) as PostWithAuthor[]
     if (verifiedOnly) results = filterVerifiedOnly(results)
     return results
   },

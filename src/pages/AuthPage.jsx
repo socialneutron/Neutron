@@ -2,18 +2,13 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Eye, EyeOff, ArrowLeft, User, Mail, Lock, Shield, Users, CheckCircle,
-  ChevronRight, Monitor, Apple
+  ChevronRight, Monitor, Apple, Send, AlertTriangle
 } from 'lucide-react'
-import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signInAnonymously,
-  updateProfile,
-  sendEmailVerification
-} from 'firebase/auth'
 import { doc, setDoc, collection, query, where, getDocs, getFirestore } from 'firebase/firestore'
-import { auth, db } from '../firebase'
+import { db } from '../firebase'
+import { useSupabaseAuth } from '../context/SupabaseAuthContext'
 import { NeutronLogo } from '../components/NeutronLogo'
+import AnimatedNeutronLogo from '../components/auth/AnimatedNeutronLogo'
 import TermsModal from '../components/auth/TermsModal'
 import './AuthPage.css'
 
@@ -59,6 +54,30 @@ export default function AuthPage({ initialMode = 'login', navigate }) {
   const [signupServerError, setSignupServerError] = useState('')
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [showTerms, setShowTerms] = useState(false)
+  const [signupSuccess, setSignupSuccess] = useState(false)
+  const [signupSuccessEmail, setSignupSuccessEmail] = useState('')
+
+  // Forgot password states
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotSent, setForgotSent] = useState(false)
+  const [forgotError, setForgotError] = useState('')
+
+  // Username availability check
+  const [usernameStatus, setUsernameStatus] = useState(null) // null | 'checking' | 'available' | 'taken' | 'error'
+
+  // Email verification notice on login
+  const [emailNotVerified, setEmailNotVerified] = useState(false)
+
+  const { signIn, signUp, signInWithGoogle, signInWithGitHub, signInWithApple, signInWithMicrosoft, verify2FA, resend2FA, enterDemo } = useSupabaseAuth()
+
+  const [twoFactorMode, setTwoFactorMode] = useState(false)
+  const [twoFactorUserId, setTwoFactorUserId] = useState('')
+  const [twoFactorEmail, setTwoFactorEmail] = useState('')
+  const [twoFactorCode, setTwoFactorCode] = useState('')
+  const [twoFactorLoading, setTwoFactorLoading] = useState(false)
+  const [twoFactorError, setTwoFactorError] = useState('')
 
   const pwStrength = getPasswordStrength(signupForm.password)
   const usernameValid = signupForm.username.length >= 3
@@ -74,46 +93,52 @@ export default function AuthPage({ initialMode = 'login', navigate }) {
     return () => window.removeEventListener('resize', check)
   }, [])
 
+  // Debounced username availability check
+  useEffect(() => {
+    if (signupForm.username.length < 3) { setUsernameStatus(null); return }
+    setUsernameStatus('checking')
+    const timer = setTimeout(async () => {
+      try {
+        const { serverAuthService } = await import('../services/serverAuthService')
+        const result = await serverAuthService.checkUsername(signupForm.username)
+        if (result.available === null) {
+          setUsernameStatus('error')
+        } else {
+          setUsernameStatus(result.available ? 'available' : 'taken')
+        }
+      } catch {
+        setUsernameStatus('error')
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [signupForm.username])
+
   // ── LOGIN ──
   const handleLogin = async (e) => {
     if (e) e.preventDefault()
     setLoginLoading(true)
     setLoginError('')
-    try {
-      await signInWithEmailAndPassword(auth, loginForm.email, loginForm.password)
-    } catch (err) {
-      if (err.code === 'auth/user-not-found') {
-        try {
-          const [r1, r2] = await Promise.allSettled([
-            getDocs(query(collection(db, 'registrations'), where('email', '==', loginForm.email))),
-            getDocs(query(collection(getCustomDb(), 'registrations'), where('email', '==', loginForm.email))),
-          ])
-          const snap = r1.status === 'fulfilled' && !r1.value.empty ? r1.value
-                     : r2.status === 'fulfilled' && !r2.value.empty ? r2.value
-                     : null
-          if (snap) {
-            const regData = snap.docs[0].data()
-            await createUserWithEmailAndPassword(auth, loginForm.email, regData.password || loginForm.password)
-            await updateProfile(auth.currentUser, { displayName: regData.username || '' })
-            await setDoc(doc(db, 'users', auth.currentUser.uid), {
-              username: regData.username || '',
-              email: loginForm.email,
-              interests: regData.interests || ['General'],
-              reputation: 4.5,
-              role: 'user',
-              joinedAt: regData.createdAt || new Date().toISOString(),
-            }, { merge: true })
-          } else {
-            setLoginError('Invalid email or password. Please try again.')
-          }
-        } catch (innerErr) {
-          setLoginError('Login failed. Please try again.')
-        }
+    setEmailNotVerified(false)
+    const result = await signIn(loginForm.email, loginForm.password)
+    if (result.error) {
+      if (result.errorType === 'EMAIL_NOT_VERIFIED') {
+        setEmailNotVerified(true)
+        setLoginError(result.error)
       } else {
-        setLoginError('Invalid email or password. Please try again.')
+        setLoginError(result.error)
       }
       setLoginLoading(false)
+      return
     }
+    if (result.requires2FA) {
+      setMode('2fa')
+      setTwoFactorUserId(result.userId)
+      setTwoFactorEmail(loginForm.email)
+      setTwoFactorMode(true)
+      setLoginLoading(false)
+      return
+    }
+    setLoginLoading(false)
   }
 
   // ── GUEST ──
@@ -121,16 +146,8 @@ export default function AuthPage({ initialMode = 'login', navigate }) {
     setLoginLoading(true)
     setLoginError('')
     try {
-      const cred = await signInAnonymously(auth)
-      await setDoc(doc(db, 'users', cred.user.uid), {
-        username: `Guest_${Math.floor(Math.random() * 10000)}`,
-        email: 'guest@neutron.app',
-        interests: ['General'],
-        reputation: 1.0,
-        role: 'guest',
-        joinedAt: new Date().toISOString()
-      }, { merge: true }).catch(e => console.warn('Firestore guest sync bypassed:', e))
-      setLoginLoading(false)
+      enterDemo()
+      navigate('home')
     } catch (err) {
       setLoginError('Guest login failed: ' + err.message)
       setLoginLoading(false)
@@ -142,6 +159,7 @@ export default function AuthPage({ initialMode = 'login', navigate }) {
     const errs = {}
     if (!signupForm.username.trim()) errs.username = 'Username is required'
     if (signupForm.username.length > 0 && signupForm.username.length < 3) errs.username = 'Minimum 3 characters'
+    if (usernameStatus === 'taken') errs.username = 'Username already taken'
     if (!signupForm.email.includes('@')) errs.email = 'Valid email is required'
     if (signupForm.password.length < 8) errs.password = 'Password must be at least 8 chars'
     if (signupForm.password !== signupForm.confirm) errs.confirm = 'Passwords do not match'
@@ -161,25 +179,60 @@ export default function AuthPage({ initialMode = 'login', navigate }) {
     if (selectedInterests.length < 3) return
     setSignupLoading(true)
     setSignupServerError('')
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, signupForm.email, signupForm.password)
-      const user = userCredential.user
-      await updateProfile(user, { displayName: signupForm.username })
-      await Promise.all([
-        sendEmailVerification(user).catch(v => console.warn('Verification skip:', v)),
-        setDoc(doc(db, 'users', user.uid), {
-          username: signupForm.username,
-          email: signupForm.email,
-          interests: selectedInterests,
-          reputation: 4.5,
-          joinedAt: new Date().toISOString()
-        }).catch(e => console.warn('Firestore bypassed:', e)),
-      ])
+    const result = await signUp(signupForm.email, signupForm.password, signupForm.username, selectedInterests)
+    if (result.error) {
+      setSignupServerError(result.error)
       setSignupLoading(false)
-    } catch (err) {
-      setSignupServerError(err.message || 'Failed to register. Please try again.')
-      setSignupLoading(false)
+      return
     }
+    setSignupSuccess(true)
+    setSignupSuccessEmail(signupForm.email)
+    setSignupLoading(false)
+  }
+
+  // ── FORGOT PASSWORD ──
+  const handleForgotPassword = async (e) => {
+    if (e) e.preventDefault()
+    if (!forgotEmail.trim()) return
+    setForgotLoading(true)
+    setForgotError('')
+    try {
+      const { api } = await import('../lib/api')
+      await api.post('/auth-api/auth/forgot-password', { email: forgotEmail.trim() })
+      setForgotSent(true)
+    } catch (err) {
+      setForgotError(err.message || 'Failed to send reset link. Please try again.')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
+  const handleResendVerification = async () => {
+    try {
+      const { api } = await import('../lib/api')
+      await api.post('/auth-api/auth/forgot-password', { email: loginForm.email })
+      setEmailNotVerified(false)
+      setLoginError('A new verification email has been sent. Please check your inbox.')
+    } catch {
+      setLoginError('Failed to resend verification email.')
+    }
+  }
+
+  // ── 2FA ──
+  const handleVerify2FA = async () => {
+    setTwoFactorLoading(true)
+    setTwoFactorError('')
+    const result = await verify2FA(twoFactorUserId, twoFactorCode)
+    if (result.error) {
+      setTwoFactorError(result.error)
+      setTwoFactorLoading(false)
+      return
+    }
+    setTwoFactorLoading(false)
+  }
+
+  const handleResend2FA = async () => {
+    await resend2FA(twoFactorUserId)
   }
 
   // ════════════════════════════════════════
@@ -192,66 +245,14 @@ export default function AuthPage({ initialMode = 'login', navigate }) {
         <div className="auth-bg-orb orb-tl" />
         <div className="auth-bg-orb orb-br" />
 
-        {/* Left Hero (desktop only) */}
+        {/* Left Hero — Animated Logo (desktop only) */}
         {!isMobile && (
           <div className="auth-hero-left">
             <div className="auth-hero-logo-wrap">
               <NeutronLogo size={90} animated showText />
             </div>
-
-            <div className="auth-hero-badge">
-              <Shield size={14} />
-              <span>Trusted by 2M+ minds worldwide</span>
-            </div>
-
-            <h1 className="auth-hero-headline">
-              <span className="neon-text">Discuss.</span><br />
-              <span className="neon-text-purple">Debate.</span><br />
-              <span style={{ color: '#fff' }}>Shape the future.</span>
-            </h1>
-
-            <p className="auth-hero-sub">
-              Join the world's most intelligent conversations on AI, politics, startups, science and more.
-            </p>
-
-            <div className="auth-hero-stats">
-              {[
-                { icon: Users, value: '2.4M+', label: 'Discussions' },
-                { icon: Globe, value: '180+', label: 'Countries' },
-                { icon: Users, value: '99K+', label: 'Online Now' },
-                { icon: Cpu, value: '24/7', label: 'Smart AI' },
-              ].map(s => (
-                <div key={s.label} className="auth-stat-card">
-                  <s.icon size={18} color="var(--accent-blue)" />
-                  <span className="auth-stat-val">{s.value}</span>
-                  <span className="auth-stat-lbl">{s.label}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="auth-trending">
-              <div className="auth-trending-header">
-                <span className="trending-icon">🔥</span>
-                <span>Trending Discussions</span>
-              </div>
-              {[
-                { text: 'Will AI reshape the future of work?', count: '12.5K' },
-                { text: 'Next big startup ideas for 2026', count: '8.1K' },
-                { text: 'Global politics in a changing world', count: '6.3K' },
-              ].map(t => (
-                <div key={t.text} className="auth-trending-row">
-                  <span className="trending-bullet">💬</span>
-                  <span className="trending-text">{t.text}</span>
-                  <span className="trending-count">{t.count} 💬</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="auth-privacy-row">
-              <span className="privacy-badge"><Shield size={12} /> End-to-end Encryption</span>
-              <span className="privacy-badge"><CheckCircle size={12} /> SOC 2 Compliant</span>
-              <span className="privacy-badge"><Shield size={12} /> Privacy Focused</span>
-              <span className="privacy-badge"><Monitor size={12} /> Secure Infrastructure</span>
+            <div className="auth-hero-centered-logo">
+              <AnimatedNeutronLogo size={280} />
             </div>
           </div>
         )}
@@ -270,7 +271,20 @@ export default function AuthPage({ initialMode = 'login', navigate }) {
               </div>
             </div>
 
-            {loginError && <div className="error-banner">{loginError}</div>}
+            {loginError && (
+              <div className="error-banner">
+                {loginError}
+                {emailNotVerified && (
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--accent-blue)', cursor: 'pointer', fontWeight: 600, fontSize: 'inherit', textDecoration: 'underline' }}
+                  >
+                    Resend verification email
+                  </button>
+                )}
+              </div>
+            )}
 
             <form onSubmit={handleLogin} className="auth-form-stack">
               <div className="form-group-new">
@@ -312,7 +326,7 @@ export default function AuthPage({ initialMode = 'login', navigate }) {
                   <span className="checkbox-custom" />
                   <span>Remember me for 30 days</span>
                 </label>
-                <button type="button" className="forgot-link" onClick={() => alert('Password reset link sent!')}>
+                <button type="button" className="forgot-link" onClick={() => { setShowForgotPassword(true); setForgotEmail(loginForm.email || ''); setForgotSent(false); setForgotError('') }}>
                   Forgot Password?
                 </button>
               </div>
@@ -329,16 +343,16 @@ export default function AuthPage({ initialMode = 'login', navigate }) {
             <div className="auth-divider"><span>OR</span></div>
 
             <div className="social-grid">
-              <button className="social-btn" onClick={handleGuestLogin}>
+              <button className="social-btn" onClick={async () => { setLoginLoading(true); const r = await signInWithGoogle(); if (r.error) setLoginError(r.error); setLoginLoading(false) }}>
                 <G size={18} /> Continue with Google
               </button>
-              <button className="social-btn">
+              <button className="social-btn" onClick={async () => { setLoginLoading(true); const r = await signInWithGitHub(); if (r.error) setLoginError(r.error); setLoginLoading(false) }}>
                 <Github size={18} /> Continue with GitHub
               </button>
-              <button className="social-btn">
+              <button className="social-btn" onClick={async () => { setLoginLoading(true); const r = await signInWithMicrosoft(); if (r.error) setLoginError(r.error); setLoginLoading(false) }}>
                 <Windows size={18} /> Continue with Microsoft
               </button>
-              <button className="social-btn">
+              <button className="social-btn" onClick={async () => { setLoginLoading(true); const r = await signInWithApple(); if (r.error) setLoginError(r.error); setLoginLoading(false) }}>
                 <Apple size={18} /> Continue with Apple
               </button>
             </div>
@@ -361,6 +375,203 @@ export default function AuthPage({ initialMode = 'login', navigate }) {
               <span className="lang-select">🌐 English ▾</span>
             </div>
           </footer>
+        </div>
+
+        {/* Email Verification Success (after signup) */}
+        <AnimatePresence>
+          {signupSuccess && (
+            <motion.div
+              className="auth-modal-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => { setSignupSuccess(false); setMode('login'); navigate('login') }}
+            >
+              <motion.div
+                className="auth-modal-card"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center' }}>
+                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(0, 210, 255, 0.1)', border: '2px solid rgba(0, 210, 255, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Mail size={28} color="var(--accent-blue)" />
+                  </div>
+                  <h2 style={{ color: '#fff', fontSize: 22, fontWeight: 800, margin: 0 }}>Check Your Email</h2>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>
+                    We sent a verification link to<br />
+                    <strong style={{ color: '#fff' }}>{signupSuccessEmail}</strong>
+                  </p>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: 0 }}>
+                    Click the link in your email to verify your account and start using Neutron.
+                  </p>
+                  <button
+                    className="glow-btn"
+                    onClick={() => { setSignupSuccess(false); setMode('login'); navigate('login') }}
+                    style={{ width: '100%', marginTop: 8 }}
+                  >
+                    Back to Sign In
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Forgot Password Modal */}
+        <AnimatePresence>
+          {showForgotPassword && (
+            <motion.div
+              className="auth-modal-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowForgotPassword(false)}
+            >
+              <motion.div
+                className="auth-modal-card"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={e => e.stopPropagation()}
+              >
+                {!forgotSent ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(0, 210, 255, 0.1)', border: '2px solid rgba(0, 210, 255, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                        <Lock size={24} color="var(--accent-blue)" />
+                      </div>
+                      <h2 style={{ color: '#fff', fontSize: 20, fontWeight: 800, margin: 0 }}>Reset Password</h2>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 6 }}>
+                        Enter your email and we'll send you a reset link.
+                      </p>
+                    </div>
+                    {forgotError && <div className="error-banner">{forgotError}</div>}
+                    <form onSubmit={handleForgotPassword} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <div className="form-group-new">
+                        <label>Email Address</label>
+                        <div className="input-icon-wrap">
+                          <Mail size={16} className="input-icon" />
+                          <input
+                            type="email"
+                            placeholder="you@domain.com"
+                            value={forgotEmail}
+                            onChange={e => setForgotEmail(e.target.value)}
+                            required
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+                      <button type="submit" className="glow-btn auth-submit" disabled={forgotLoading || !forgotEmail.trim()}>
+                        {forgotLoading ? <span className="loading-spinner" /> : <><Send size={14} /> Send Reset Link</>}
+                      </button>
+                    </form>
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotPassword(false)}
+                      style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 13, textAlign: 'center' }}
+                    >
+                      ← Back to login
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center' }}>
+                    <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(34, 197, 94, 0.1)', border: '2px solid rgba(34, 197, 94, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <CheckCircle size={24} color="#22c55e" />
+                    </div>
+                    <h2 style={{ color: '#fff', fontSize: 20, fontWeight: 800, margin: 0 }}>Check Your Email</h2>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: 0 }}>
+                      If an account exists for <strong style={{ color: '#fff' }}>{forgotEmail}</strong>, we've sent a password reset link.
+                    </p>
+                    <button
+                      className="glow-btn"
+                      onClick={() => { setShowForgotPassword(false); setMode('login') }}
+                      style={{ width: '100%', marginTop: 4 }}
+                    >
+                      Back to Sign In
+                    </button>
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    )
+  }
+
+  // ════════════════════════════════════════
+  //  2FA VERIFICATION VIEW
+  // ════════════════════════════════════════
+  if (mode === '2fa') {
+    return (
+      <div className="auth-page-new">
+        <div className="auth-bg-grid" />
+        <div className="auth-bg-orb orb-tl" />
+        <div className="auth-bg-orb orb-br" />
+
+        <div className="auth-form-right" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="auth-login-card" style={{ maxWidth: 440, width: '100%' }}>
+            <div className="auth-card-header">
+              <div>
+                <h2 className="auth-card-title">Two-Factor Authentication</h2>
+                <p className="auth-card-sub">Enter the 6-digit code sent to {twoFactorEmail}</p>
+              </div>
+              <div className="secure-badge">
+                <Shield size={12} />
+                <span>Secure</span>
+              </div>
+            </div>
+
+            {twoFactorError && <div className="error-banner">{twoFactorError}</div>}
+
+            <div className="auth-form-stack" style={{ gap: 16 }}>
+              <div className="form-group-new">
+                <label>Verification Code</label>
+                <div className="input-icon-wrap">
+                  <Shield size={16} className="input-icon" />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    placeholder="000000"
+                    value={twoFactorCode}
+                    onChange={e => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
+                    style={{ letterSpacing: '0.5em', fontSize: '20px', textAlign: 'center' }}
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="glow-btn auth-submit"
+                onClick={handleVerify2FA}
+                disabled={twoFactorLoading || twoFactorCode.length !== 6}
+              >
+                {twoFactorLoading ? <span className="loading-spinner" /> : 'Verify Code'}
+              </button>
+
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={handleResend2FA}
+                style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#9ca3af', padding: '10px', borderRadius: '10px', cursor: 'pointer', fontSize: '13px' }}
+              >
+                Resend Code
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setMode('login'); setTwoFactorMode(false); setTwoFactorCode(''); setTwoFactorError('') }}
+                style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: '13px', textAlign: 'center' }}
+              >
+                ← Back to login
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -431,14 +642,19 @@ export default function AuthPage({ initialMode = 'login', navigate }) {
                   <div className="input-icon-wrap">
                     <User size={16} className="input-icon" />
                     <input
-                      placeholder="elegent610@gmail.com"
+                      placeholder="Choose a username"
                       value={signupForm.username}
-                      onChange={e => setSignupForm({ ...signupForm, username: e.target.value })}
+                      onChange={e => setSignupForm({ ...signupForm, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
                       id="signup-username-input"
+                      maxLength={30}
                     />
-                    {usernameValid && <CheckCircle size={16} className="input-valid-icon" />}
+                    {usernameStatus === 'available' && <span style={{ color: '#22c55e', fontSize: 16, lineHeight: 1 }}>✓</span>}
+                    {usernameStatus === 'taken' && <span style={{ color: '#ef4444', fontSize: 16, lineHeight: 1 }}>✕</span>}
+                    {usernameStatus === 'checking' && <span className="loading-spinner" style={{ width: 14, height: 14 }} />}
                   </div>
                   {signupErrors.username && <span className="error-msg">{signupErrors.username}</span>}
+                  {usernameStatus === 'available' && !signupErrors.username && <span style={{ color: '#22c55e', fontSize: 12, marginTop: 2, display: 'block' }}>Username available</span>}
+                  {usernameStatus === 'taken' && !signupErrors.username && <span style={{ color: '#ef4444', fontSize: 12, marginTop: 2, display: 'block' }}>Username already taken</span>}
                 </div>
 
                 <div className="form-group-new">
@@ -531,8 +747,8 @@ export default function AuthPage({ initialMode = 'login', navigate }) {
                   type="button"
                   className="glow-btn auth-submit"
                   onClick={handleSignupNext}
-                  disabled={!agreedToTerms}
-                  style={{ opacity: agreedToTerms ? 1 : 0.4, cursor: agreedToTerms ? 'pointer' : 'not-allowed' }}
+                  disabled={!agreedToTerms || usernameStatus === 'taken' || usernameStatus === 'checking'}
+                  style={{ opacity: agreedToTerms && usernameStatus !== 'taken' && usernameStatus !== 'checking' ? 1 : 0.4, cursor: agreedToTerms && usernameStatus !== 'taken' && usernameStatus !== 'checking' ? 'pointer' : 'not-allowed' }}
                   id="signup-continue-btn"
                 >
                   Continue →

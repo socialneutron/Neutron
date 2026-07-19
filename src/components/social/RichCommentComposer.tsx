@@ -41,7 +41,7 @@ export default function RichCommentComposer({
       setText('')
       onCommentSent?.(comment, parentId)
       if (postAuthorId !== user.id) {
-        await notificationService.create(postAuthorId, user.id, 'comment', postId, comment.id)
+        await notificationService.create(postAuthorId, user.id, parentId ? 'reply' : 'comment', postId, comment.id)
       }
     }
     setSending(false)

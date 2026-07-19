@@ -8,16 +8,21 @@ const asyncHandler = require('../utils/asyncHandler');
 const { parsePagination, paginatedResponse } = require('../utils/paginate');
 
 const createPost = asyncHandler(async (req, res) => {
-  const { caption, location, visibility } = req.body;
+  const { caption, title, body, location, visibility, images, category, categoryColor, tags } = req.body;
 
-  const post = await Post.create({
+  const postData = {
     author: req.user._id,
-    caption,
+    caption: caption || title || '',
     location,
     visibility,
-  });
+  };
 
-  // Upload media if files present
+  if (category) postData.hashtags = tags || [];
+  if (category) postData.category = category;
+
+  const post = await Post.create(postData);
+
+  // Upload media if files present (Cloudinary path)
   if (req.files && req.files.length > 0) {
     const mediaUploads = await Promise.all(
       req.files.map(async (file) => {
@@ -34,6 +39,16 @@ const createPost = asyncHandler(async (req, res) => {
       })
     );
     post.media = mediaUploads;
+    await post.save({ validateModifiedOnly: true });
+  }
+
+  // Accept images array from frontend (base64 data URLs)
+  if (images && Array.isArray(images) && images.length > 0 && (!post.media || post.media.length === 0)) {
+    post.media = images.map((url, idx) => ({
+      url,
+      publicId: `local-${Date.now()}-${idx}`,
+      resourceType: 'image',
+    }));
     await post.save({ validateModifiedOnly: true });
   }
 
@@ -72,11 +87,12 @@ const getFeed = asyncHandler(async (req, res) => {
     .populate('author', 'username displayName profilePicture isVerified')
     .lean();
 
-  // Set isLiked/isSaved for each post
+  // Set isLiked/isSaved/isReposted for each post
   const postsWithFlags = posts.map((post) => ({
     ...post,
     isLiked: post.likes.some((id) => id.toString() === req.user._id.toString()),
     isSaved: user.savedPosts.some((id) => id.toString() === post._id.toString()),
+    isReposted: user.repostedPosts.some((id) => id.toString() === post._id.toString()),
   }));
 
   res
@@ -101,6 +117,7 @@ const getTrending = asyncHandler(async (req, res) => {
     ...post,
     isLiked: post.likes.some((id) => id.toString() === req.user?._id?.toString()),
     isSaved: false,
+    isReposted: false,
   }));
 
   res
@@ -130,6 +147,7 @@ const getByHashtag = asyncHandler(async (req, res) => {
     ...post,
     isLiked: post.likes.some((id) => id.toString() === req.user?._id?.toString()),
     isSaved: false,
+    isReposted: false,
   }));
 
   res
@@ -166,15 +184,17 @@ const getPost = asyncHandler(async (req, res) => {
 
   let isLiked = false;
   let isSaved = false;
+  let isReposted = false;
   if (req.user) {
     isLiked = post.likes.some((id) => id.toString() === req.user._id.toString());
     const currentUser = await User.findById(req.user._id).lean();
     isSaved = currentUser.savedPosts.some((id) => id.toString() === postId);
+    isReposted = currentUser.repostedPosts.some((id) => id.toString() === postId);
   }
 
   res
     .status(200)
-    .json(new ApiResponse(200, { post: { ...post, isLiked, isSaved } }, 'Post fetched.'));
+    .json(new ApiResponse(200, { post: { ...post, isLiked, isSaved, isReposted } }, 'Post fetched.'));
 });
 
 const updatePost = asyncHandler(async (req, res) => {
@@ -219,6 +239,13 @@ const deletePost = asyncHandler(async (req, res) => {
   await post.save();
 
   await User.findByIdAndUpdate(req.user._id, { $inc: { postsCount: -1 } });
+
+  // Clean up saved/reposted references from all users
+  await User.updateMany({ savedPosts: postId }, { $pull: { savedPosts: postId } });
+  await User.updateMany({ repostedPosts: postId }, { $pull: { repostedPosts: postId } });
+
+  const Notification = require('../models/Notification.model');
+  await Notification.deleteMany({ post: postId });
 
   res
     .status(200)
@@ -314,19 +341,39 @@ const toggleRepost = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'You cannot repost your own post.');
   }
 
-  await Post.findByIdAndUpdate(postId, { $inc: { sharesCount: 1 } });
+  const user = await User.findById(userId);
+  const isReposted = user.repostedPosts.some((id) => id.toString() === postId);
 
-  await createNotification({
-    receiverId: post.author,
-    senderId: userId,
-    type: 'post_share',
-    postId,
-    preview: `${req.user.username} reposted your post.`,
-  });
+  if (isReposted) {
+    await User.findByIdAndUpdate(userId, { $pull: { repostedPosts: postId } });
+    await Post.findByIdAndUpdate(postId, { $inc: { sharesCount: -1 } });
 
-  res
-    .status(200)
-    .json(new ApiResponse(200, { reposted: true }, 'Post reposted.'));
+    await removeNotification({
+      receiverId: post.author,
+      senderId: userId,
+      type: 'post_share',
+      postId,
+    });
+
+    res
+      .status(200)
+      .json(new ApiResponse(200, { reposted: false }, 'Repost removed.'));
+  } else {
+    await User.findByIdAndUpdate(userId, { $addToSet: { repostedPosts: postId } });
+    await Post.findByIdAndUpdate(postId, { $inc: { sharesCount: 1 } });
+
+    await createNotification({
+      receiverId: post.author,
+      senderId: userId,
+      type: 'post_share',
+      postId,
+      preview: `${req.user.username} reposted your post.`,
+    });
+
+    res
+      .status(200)
+      .json(new ApiResponse(200, { reposted: true }, 'Post reposted.'));
+  }
 });
 
 module.exports = {

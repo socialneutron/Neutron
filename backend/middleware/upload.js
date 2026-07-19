@@ -38,27 +38,6 @@ const fileFilter = (type = 'image') => (_req, file, cb) => {
 
 // ── Multer instances ──────────────────────────────────────────────────
 
-/** Single avatar / cover photo — max 5 MB */
-const uploadSingleImage = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
-  fileFilter: fileFilter('image'),
-});
-
-/** Up to 10 mixed media files for a post — max 25 MB each */
-const uploadPostMedia = multer({
-  storage,
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
-  fileFilter: fileFilter('any'),
-}).array('media', 10);
-
-/** Single message attachment — max 10 MB */
-const uploadMessageMedia = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
-  fileFilter: fileFilter('any'),
-}).single('media');
-
 /**
  * Wraps a multer middleware in error handling so Multer errors
  * are forwarded as ApiErrors (not Express 500s).
@@ -83,6 +62,29 @@ const handleMulterError = (multerMiddleware) => (req, res, next) => {
     next(new ApiError(500, 'File upload failed.'));
   });
 };
+
+/** Single avatar / cover photo — max 5 MB */
+const uploadSingleImage = handleMulterError(
+  multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+    fileFilter: fileFilter('image'),
+  }).single('image')
+);
+
+/** Up to 10 mixed media files for a post — max 25 MB each */
+const uploadPostMedia = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
+  fileFilter: fileFilter('any'),
+}).array('media', 10);
+
+/** Single message attachment — max 10 MB */
+const uploadMessageMedia = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  fileFilter: fileFilter('any'),
+}).single('media');
 
 module.exports = {
   uploadSingleImage,

@@ -1,12 +1,15 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Heart, MessageCircle, Repeat2, Bookmark, MoreHorizontal, Trash2, X, Send, Share2 } from 'lucide-react'
+import { Heart, MessageCircle, Repeat2, Bookmark, MoreHorizontal, Trash2, X, Share2 } from 'lucide-react'
 import { useSupabaseAuth } from '../../context/SupabaseAuthContext'
-import { likeService, repostService, bookmarkService, postService, notificationService } from '../../services'
+import { likeService, repostService, bookmarkService, postService, notificationService, feedService } from '../../services'
 import { useFeedStore } from '../../stores/feedStore'
+import { useUserAvatar } from '../../stores/userAvatarStore'
 import type { PostWithAuthor } from '../../types/database'
+import { timeAgo } from '@/lib/timeAgo'
 import CommentsModal from './CommentsModal'
 import ShareToChatModal from './ShareToChatModal'
+import PostImages, { resolvePostImages } from './PostImages'
 
 const C = {
   bg: '#05050A', card: '#090914', cardBdr: 'rgba(255,255,255,0.06)',
@@ -21,9 +24,22 @@ interface PostCardProps {
   showFull?: boolean
 }
 
+type LayoutVariant = 'text-only' | 'has-images'
+
 export default function PostCard({ post, navigate, delay = 0, showFull = false }: PostCardProps) {
   const { user, profile } = useSupabaseAuth()
   const { updatePost, removePost } = useFeedStore()
+  const { avatar: globalAvatar, displayName: globalDisplayName } = useUserAvatar()
+
+  const isOwnPost = user?.id === post.author_id || user?.uid === post.author_id
+
+  const effectiveAuthor = (isOwnPost && post.author) ? {
+    ...post.author,
+    display_name: globalDisplayName || post.author.display_name,
+    avatar_url: globalAvatar || post.author.avatar_url,
+    username: (globalDisplayName || '').toLowerCase().replace(/\s/g, '_') || post.author.username,
+  } : post.author
+
   const [liked, setLiked] = useState(post.is_liked || false)
   const [likeCount, setLikeCount] = useState(post.likes_count || 0)
   const [bookmarked, setBookmarked] = useState(post.is_bookmarked || false)
@@ -37,16 +53,20 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
   const [commentAnimating, setCommentAnimating] = useState(false)
   const [showRepostModal, setShowRepostModal] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [repostComment, setRepostComment] = useState('')
   const [reposting, setReposting] = useState(false)
 
   const [showAvatarImg, setShowAvatarImg] = useState(true)
-  const [isTogglingLike, setIsTogglingLike] = useState(false)
+  const isTogglingLike = useRef(false)
+
+  const resolvedImages = resolvePostImages(post)
 
   const handleLike = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!user || isTogglingLike) return
-    setIsTogglingLike(true)
+    // useRef guard — always reads the live value, never stale from closure
+    if (!user || isTogglingLike.current) return
+    isTogglingLike.current = true
     const prevLiked = liked
     const prevCount = likeCount
     setLikeAnimating(true)
@@ -63,7 +83,7 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
       setLiked(prevLiked)
       setLikeCount(prevCount)
     } finally {
-      setIsTogglingLike(false)
+      isTogglingLike.current = false
     }
   }, [user, liked, likeCount, post, updatePost])
 
@@ -84,13 +104,15 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
   const handleRepost = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (!user) return
+    if (post.author_id === user.id) return
     setShowRepostModal(true)
-  }, [user])
+  }, [user, post.author_id])
 
   const handleRepostSubmit = useCallback(async () => {
-    if (!user || reposting || reposted) return
+    if (!user || reposting || reposted || post.author_id === user.id) return
     setReposting(true)
     try {
+      await repostService.toggle(user.id, post.id)
       const newPost = await postService.create(user.id, {
         title: post.title,
         body: repostComment.trim()
@@ -99,6 +121,7 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
         category: post.category,
         category_color: post.category_color,
         tags: post.tags,
+        image_url: post.image_url || undefined,
       })
       if (newPost) {
         const authorData = {
@@ -116,7 +139,6 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
           is_liked: false, is_bookmarked: false, is_reposted: false,
         }
         useFeedStore.getState().addPost(fullPost)
-        await repostService.toggle(user.id, post.id)
         const newCount = repostCount + 1
         setReposted(true)
         setRepostCount(newCount)
@@ -124,7 +146,7 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
         setTimeout(() => setRepostAnimating(false), 600)
         updatePost(post.id, { is_reposted: true, reposts_count: newCount })
         if (post.author_id !== user.id) {
-          await notificationService.create(post.author_id, user.id, 'repost', post.id)
+          await notificationService.create(post.author_id, user.id, 'post_share', post.id)
         }
       }
     } catch {}
@@ -136,34 +158,82 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
   const handleDelete = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (!user || user.id !== post.author_id) return
+    setShowDeleteConfirm(true)
+    setShowMenu(false)
+  }, [user, post.author_id])
+
+  const confirmDelete = useCallback(async () => {
+    if (!user || user.id !== post.author_id) return
     try {
       const success = await postService.delete(post.id, user.id)
       if (success) removePost(post.id)
     } catch {}
-    setShowMenu(false)
+    setShowDeleteConfirm(false)
   }, [user, post, removePost])
 
   const formatNum = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n)
 
-  const timeAgo = (date: string) => {
-    const diff = Date.now() - new Date(date).getTime()
-    const mins = Math.floor(diff / 60000)
-    if (mins < 60) return `${mins}m`
-    const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `${hrs}h`
-    const days = Math.floor(hrs / 24)
-    return `${days}d`
+  const getLayoutVariant = (): LayoutVariant => {
+    if (resolvedImages.length === 0) return 'text-only'
+    return 'has-images'
   }
+
+  const layoutVariant = getLayoutVariant()
+
+  const cardRef = useRef<HTMLDivElement>(null)
+  const viewTracked = useRef(false)
+  const dwellStart = useRef<number>(0)
+
+  useEffect(() => {
+    const el = cardRef.current
+    if (!el) return
+
+    const timers: ReturnType<typeof setTimeout>[] = []
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          dwellStart.current = Date.now()
+          if (!viewTracked.current) {
+            viewTracked.current = true
+            feedService.trackEvent(post.id, 'view')
+          }
+          timers.push(setTimeout(() => feedService.trackEvent(post.id, 'dwell_3s'), 3000))
+          timers.push(setTimeout(() => feedService.trackEvent(post.id, 'dwell_10s'), 10000))
+          timers.push(setTimeout(() => feedService.trackEvent(post.id, 'dwell_30s'), 30000))
+        } else {
+          timers.forEach(t => clearTimeout(t))
+          timers.length = 0
+          const elapsed = Date.now() - dwellStart.current
+          if (elapsed > 0 && elapsed < 1000) {
+            feedService.trackEvent(post.id, 'skip')
+          }
+          dwellStart.current = 0
+        }
+      },
+      { threshold: 0.5 }
+    )
+
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+      timers.forEach(t => clearTimeout(t))
+    }
+  }, [post.id])
 
   return (
     <>
       <motion.div
+        ref={cardRef}
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay }}
         style={{
-          padding: '18px 20px', borderBottom: `1px solid ${C.border}`,
-          background: C.card, cursor: 'default',
+          padding: layoutVariant === 'text-only' ? '18px 20px 18px 22px' : '18px 20px',
+          borderBottom: `1px solid ${C.border}`,
+          background: C.card,
+          cursor: 'default',
+          borderLeft: layoutVariant === 'text-only' ? `3px solid ${post.category_color || C.cyan}` : '3px solid transparent',
         }}
       >
         {/* Header row */}
@@ -175,18 +245,18 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
               navigate('profile', {
                 author: {
                   id: post.author_id,
-                  name: post.author?.display_name,
-                  handle: `@${post.author?.username}`,
-                  avatar: post.author?.avatar_url,
-                  verified: post.author?.is_verified,
+                  name: effectiveAuthor?.display_name,
+                  handle: `@${effectiveAuthor?.username}`,
+                  avatar: effectiveAuthor?.avatar_url,
+                  verified: effectiveAuthor?.is_verified,
                 },
               })
             }}
           >
-            {post.author?.avatar_url && showAvatarImg ? (
+            {effectiveAuthor?.avatar_url && showAvatarImg ? (
               <img
-                src={post.author.avatar_url}
-                alt={post.author?.display_name || 'Author'}
+                src={effectiveAuthor.avatar_url}
+                alt={effectiveAuthor?.display_name || 'Author'}
                 style={{
                   width: 40, height: 40, borderRadius: 12,
                   objectFit: 'cover', flexShrink: 0,
@@ -200,15 +270,15 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 15, fontWeight: 700, color: '#fff', flexShrink: 0,
               }}>
-                {post.author?.display_name?.[0]?.toUpperCase() || '?'}
+                {effectiveAuthor?.display_name?.[0]?.toUpperCase() || '?'}
               </div>
             )}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{post.author?.display_name}</span>
-                {post.author?.is_verified && <span style={{ width: 16, height: 16, borderRadius: '50%', background: C.cyan, color: '#000', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 10px rgba(0,210,255,0.5)' }}>✓</span>}
+                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{effectiveAuthor?.display_name}</span>
+                {effectiveAuthor?.is_verified && <span style={{ width: 16, height: 16, borderRadius: '50%', background: C.cyan, color: '#000', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 10px rgba(0,210,255,0.5)' }}>✓</span>}
               </div>
-              <span style={{ fontSize: 12, color: C.muted }}>@{post.author?.username} · {timeAgo(post.created_at)}</span>
+              <span style={{ fontSize: 12, color: C.muted }}>@{effectiveAuthor?.username} · {timeAgo(post.created_at)}</span>
             </div>
           </div>
           <div style={{ position: 'relative' }}>
@@ -229,25 +299,64 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
 
         {/* Content — clickable → post detail */}
         <div onClick={() => navigate('post', { postId: post.id })} style={{ cursor: 'pointer' }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.45, marginBottom: 7, color: C.text, letterSpacing: '-0.2px' }}>{post.title}</h3>
-          {(showFull || (post.body || '').length <= 300) ? (
-            <p style={{ fontSize: 14, color: '#9ca3af', lineHeight: 1.65, marginBottom: 12, whiteSpace: 'pre-wrap' }}>{post.body}</p>
+          {layoutVariant === 'has-images' ? (
+            /* Horizontal split: image left, text right */
+            <div style={{ display: 'flex', gap: 14, marginBottom: 12 }}>
+              {/* Left: image carousel */}
+              <div style={{ width: 200, flexShrink: 0, minWidth: 0 }}>
+                <PostImages images={resolvedImages} maxHeight={200} borderRadius={10} />
+              </div>
+              {/* Right: text + tags */}
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  {post.title && <h3 style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.45, marginBottom: 7, color: C.text, letterSpacing: '-0.2px' }}>{post.title}</h3>}
+                  {post.body && (
+                    (showFull || (post.body || '').length <= 300) ? (
+                      <p style={{ fontSize: 14, color: '#9ca3af', lineHeight: 1.65, marginBottom: 0, whiteSpace: 'pre-wrap' }}>{post.body}</p>
+                    ) : (
+                      <p style={{ fontSize: 14, color: '#9ca3af', lineHeight: 1.65, marginBottom: 0, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.body}</p>
+                    )
+                  )}
+                  {!post.title && !post.body && (
+                    <p style={{ fontSize: 14, color: C.muted, fontStyle: 'italic', margin: 0 }}>No content</p>
+                  )}
+                </div>
+                {post.tags?.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                    {post.tags.map(tag => (
+                      <span key={tag} style={{ fontSize: 11, color: C.cyan, opacity: 0.75 }}>#{tag}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           ) : (
-            <p style={{ fontSize: 14, color: '#9ca3af', lineHeight: 1.65, marginBottom: 12, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.body}</p>
-          )}
-          {post.image_url && (
-            <img src={post.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, maxHeight: 400, objectFit: 'cover' }} />
+            /* Text-only: full width */
+            <>
+              {post.title || post.body ? (
+                <>
+                  {post.title && <h3 style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.45, marginBottom: 7, color: C.text, letterSpacing: '-0.2px' }}>{post.title}</h3>}
+                  {post.body && (
+                    (showFull || (post.body || '').length <= 300) ? (
+                      <p style={{ fontSize: 14, color: '#9ca3af', lineHeight: 1.65, marginBottom: 0, whiteSpace: 'pre-wrap' }}>{post.body}</p>
+                    ) : (
+                      <p style={{ fontSize: 14, color: '#9ca3af', lineHeight: 1.65, marginBottom: 0, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.body}</p>
+                    )
+                  )}
+                </>
+              ) : (
+                <p style={{ fontSize: 14, color: C.muted, fontStyle: 'italic', margin: 0 }}>No content</p>
+              )}
+              {post.tags?.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                  {post.tags.map(tag => (
+                    <span key={tag} style={{ fontSize: 12, color: C.cyan, opacity: 0.75 }}>#{tag}</span>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
-
-        {/* Tags */}
-        {post.tags?.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-            {post.tags.map(tag => (
-              <span key={tag} style={{ fontSize: 12, color: C.cyan, opacity: 0.75 }}>#{tag}</span>
-            ))}
-          </div>
-        )}
 
         {/* Action Bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderTop: `1px solid ${C.border}`, paddingTop: 10, marginTop: 4 }}>
@@ -351,15 +460,15 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
           {/* REPOST */}
           <div style={{ position: 'relative' }}>
             <motion.button
-              whileTap={{ scale: 0.7 }}
+              whileTap={{ scale: post.author_id === user?.id ? 1 : 0.7 }}
               onClick={handleRepost}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
                 borderRadius: 8, border: 'none', background: 'transparent',
-                color: reposted ? C.green : C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                color: post.author_id === user?.id ? 'rgba(255,255,255,0.15)' : reposted ? C.green : C.muted, fontSize: 13, fontWeight: 600, cursor: post.author_id === user?.id ? 'not-allowed' : 'pointer',
                 transition: 'color 0.2s, background 0.2s',
               }}
-              onMouseEnter={e => { if (!reposted) e.currentTarget.style.background = 'rgba(52,211,153,0.06)' }}
+              onMouseEnter={e => { if (!reposted && post.author_id !== user?.id) e.currentTarget.style.background = 'rgba(52,211,153,0.06)' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
             >
               <motion.div
@@ -527,6 +636,58 @@ export default function PostCard({ post, navigate, delay = 0, showFull = false }
                   }}
                 >
                   <Repeat2 size={14} /> {reposting ? 'Reposting...' : 'Repost'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Dialog */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 200,
+              background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+            onClick={() => setShowDeleteConfirm(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: C.card, border: `1px solid ${C.cardBdr}`, borderRadius: 16,
+                padding: '24px', width: 300, textAlign: 'center',
+              }}
+            >
+              <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: C.text }}>Delete Post?</h3>
+              <p style={{ margin: '0 0 20px', fontSize: 13, color: C.muted, lineHeight: 1.5 }}>
+                This action cannot be undone. The post and all its comments will be permanently removed.
+              </p>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  style={{
+                    flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${C.border}`,
+                    background: 'transparent', color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  style={{
+                    flex: 1, padding: '10px', borderRadius: 10, border: 'none',
+                    background: '#ef4444', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  }}
+                >
+                  Delete
                 </button>
               </div>
             </motion.div>

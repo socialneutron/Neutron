@@ -40,6 +40,20 @@ const messageSchema = new mongoose.Schema(
     read:      { type: Boolean, default: false },
     readAt:    { type: Date },
 
+    // E2E Encryption fields
+    isEncrypted: { type: Boolean, default: false },
+    encryptedEnvelope: {
+      header: {
+        ephemeralPubKey: { type: String, default: '' },
+        prevChainLength: { type: Number, default: 0 },
+        messageNum:      { type: Number, default: 0 },
+      },
+      ciphertext:   { type: String, default: '' },
+      nonce:        { type: String, default: '' },
+      mac:          { type: String, default: '' },
+      isEncrypted:  { type: Boolean, default: false },
+    },
+
     // Soft delete per-side
     deletedBySender:   { type: Boolean, default: false },
     deletedByReceiver: { type: Boolean, default: false },

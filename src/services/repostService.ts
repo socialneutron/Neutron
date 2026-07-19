@@ -14,7 +14,11 @@ export const repostService = {
       await supabase.rpc('decrement_count', { table_name: 'posts', column_name: 'reposts_count', row_id: postId })
       return false
     } else {
-      await supabase.from('reposts').insert({ user_id: userId, post_id: postId })
+      const { error } = await supabase.from('reposts').insert({ user_id: userId, post_id: postId })
+      if (error) {
+        if (error.code === '23505') return false
+        return false
+      }
       await supabase.rpc('increment_count', { table_name: 'posts', column_name: 'reposts_count', row_id: postId })
       return true
     }

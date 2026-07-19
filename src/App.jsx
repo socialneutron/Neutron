@@ -1,39 +1,48 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { signOut } from 'firebase/auth';
-import { auth } from './firebase';
-import { useAuth } from './context/AuthContext';
+import { useSupabaseAuth } from './context/SupabaseAuthContext';
+import { useProfileStore } from './stores/profileStore';
+import { useChatStore } from './stores/chatStore';
 import SplashScreen from './pages/SplashScreen';
-import WelcomeScreen from './pages/WelcomeScreen';
-import AuthPage from './pages/AuthPage';
-import OnboardingFlow from './pages/OnboardingFlow';
-import HomeFeed from './pages/HomeFeed';
-import TopicHub from './pages/TopicHub';
-import PostCreation from './pages/PostCreation';
-import ChatSystem from './pages/ChatSystem';
-import ProfilePage from './pages/ProfilePage';
-import BusinessPage from './pages/BusinessPage';
-import SettingsPage from './pages/SettingsPage';
-import WorkflowPage from './pages/WorkflowPage';
 import BottomNav from './components/BottomNav';
-import StoreVerification from './pages/StoreVerification';
-import StoreCreated from './pages/StoreCreated';
-import Hero from './components/landing/Hero';
-import LoginCard from './components/auth/LoginCard';
-import RegisterCard from './components/auth/RegisterCard';
-import VerifyOtp from './components/auth/VerifyOtp';
-import TwoFactorVerify from './components/auth/TwoFactorVerify';
-import ForgotPassword from './components/auth/ForgotPassword';
-import ResetPassword from './components/auth/ResetPassword';
-import SessionSettings from './components/profile/SessionSettings';
-import NotificationsPage from './pages/NotificationsPage';
-import PostDetail from './pages/social/PostDetail';
-import PostDiscussionPage from './pages/social/PostDiscussionPage';
-import BookmarksPage from './pages/social/BookmarksPage';
-import ExplorePage from './pages/ExplorePage';
+import { ToastProvider } from './components/ToastNotification';
+import { MessageToastProvider } from './components/common/MessageToast';
+
+const WelcomeScreen = lazy(() => import('./pages/WelcomeScreen'));
+const AuthPage = lazy(() => import('./pages/AuthPage'));
+const OnboardingFlow = lazy(() => import('./pages/OnboardingFlow'));
+const HomeFeed = lazy(() => import('./pages/HomeFeed'));
+const TopicHub = lazy(() => import('./pages/TopicHub'));
+const PostCreation = lazy(() => import('./pages/PostCreation'));
+const ChatSystem = lazy(() => import('./pages/ChatSystem'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const BusinessPage = lazy(() => import('./pages/BusinessPage'));
+const MagazineDetailPage = lazy(() => import('./components/business/MagazineDetailPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const WorkflowPage = lazy(() => import('./pages/WorkflowPage'));
+const StoreVerification = lazy(() => import('./pages/StoreVerification'));
+const StoreCreated = lazy(() => import('./pages/StoreCreated'));
+const Hero = lazy(() => import('./components/landing/Hero'));
+const LoginCard = lazy(() => import('./components/auth/LoginCard'));
+const RegisterCard = lazy(() => import('./components/auth/RegisterCard'));
+const VerifyOtp = lazy(() => import('./components/auth/VerifyOtp'));
+const TwoFactorVerify = lazy(() => import('./components/auth/TwoFactorVerify'));
+const ForgotPassword = lazy(() => import('./components/auth/ForgotPassword'));
+const ResetPassword = lazy(() => import('./components/auth/ResetPassword'));
+const SessionSettings = lazy(() => import('./components/profile/SessionSettings'));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+const PostDetailPage = lazy(() => import('./pages/social/PostDetailPage'));
+const BookmarksPage = lazy(() => import('./pages/social/BookmarksPage'));
+const ExplorePage = lazy(() => import('./pages/ExplorePage'));
+const SupplierDetailPage = lazy(() => import('./components/business/SupplierDetailPage'));
+const ProductDetailPage = lazy(() => import('./components/business/ProductDetailPage'));
+const TalentDetailPage = lazy(() => import('./components/business/TalentDetailPage'));
+const MyListingsPage = lazy(() => import('./components/business/MyListingsPage'));
 
 export default function App() {
-  const { user, loading } = useAuth()
+  const { user, loading, signOut: authSignOut } = useSupabaseAuth()
+  const { setProfile, setIsFollowing } = useProfileStore()
+  const getTotalUnread = useChatStore((s) => s.getTotalUnread)
   const [currentPage, setCurrentPage] = useState('splash')
   const [selectedTopic, setSelectedTopic] = useState(null)
   const [chatRecipient, setChatRecipient] = useState(null)
@@ -41,7 +50,14 @@ export default function App() {
   const [authParams, setAuthParams] = useState({})
   const [profileAuthor, setProfileAuthor] = useState(null)
   const [navParams, setNavParams] = useState({})
-  const [fxEnabled, setFxEnabled] = useState(true)
+  const [navHidden, setNavHidden] = useState(false)
+  const navTimerRef = useRef(null)
+
+  const resetNavTimer = useCallback(() => {
+    setNavHidden(false)
+    clearTimeout(navTimerRef.current)
+    navTimerRef.current = setTimeout(() => setNavHidden(true), 10000)
+  }, [])
 
   useEffect(() => {
     if (loading) return
@@ -58,6 +74,9 @@ export default function App() {
     if (params.assetData) setSharedAssetData(params.assetData)
     if (params.author) {
       setProfileAuthor(params.author)
+    } else if (page !== 'profile') {
+      setProfileAuthor(null)
+      setIsFollowing(false)
     } else {
       setProfileAuthor(null)
     }
@@ -66,13 +85,28 @@ export default function App() {
   }
 
   const handleLogout = async () => {
-    await signOut(auth)
+    await authSignOut()
     navigate('welcome')
   }
 
   const mainPages = ['home', 'chat', 'explore', 'workflow', 'create', 'business', 'profile']
 
-  const subPages = ['notifications', 'settings', 'post', 'bookmarks', 'explore', 'topic']
+  const subPages = ['notifications', 'settings', 'post', 'bookmarks', 'explore', 'topic', 'myListings', 'supplierDetail', 'productDetail', 'talentDetail']
+
+  const showBottomNav = mainPages.includes(currentPage) || subPages.includes(currentPage)
+
+  useEffect(() => {
+    if (!showBottomNav) return
+    resetNavTimer()
+    const handler = () => resetNavTimer()
+    document.addEventListener('click', handler)
+    document.addEventListener('touchstart', handler)
+    return () => {
+      clearTimeout(navTimerRef.current)
+      document.removeEventListener('click', handler)
+      document.removeEventListener('touchstart', handler)
+    }
+  }, [showBottomNav, currentPage, resetNavTimer])
 
   const navigateAuth = (page, params) => {
     if (params) setAuthParams(params)
@@ -98,7 +132,7 @@ export default function App() {
       case 'verify':
         return <VerifyOtp key="verify" onNavigate={navigateAuth} params={{ email: authParams.email }} />
       case '2fa':
-        return <TwoFactorVerify key="2fa" onNavigate={navigateAuth} params={{ userId: user?.uid }} />
+        return <TwoFactorVerify key="2fa" onNavigate={navigateAuth} params={{ userId: user?.id }} />
       case 'forgot-password':
         return <ForgotPassword key="forgot-password" onNavigate={navigateAuth} />
       case 'reset-password':
@@ -116,15 +150,25 @@ export default function App() {
       case 'create':
         return <PostCreation key="create" navigate={navigate} />
       case 'chat':
-        return <ChatSystem key="chat" recipient={chatRecipient} navigate={navigate} user={user} />
+        return <ChatSystem key="chat" recipient={chatRecipient} navigate={navigate} user={user} navParams={navParams} />
       case 'profile':
-        return <ProfilePage key={`profile-${profileAuthor?.name || 'self'}`} user={user} navigate={navigate} profileAuthor={profileAuthor} />
+        return <ProfilePage key={profileAuthor ? `profile-other-${profileAuthor.id || profileAuthor.handle}` : 'profile-self'} user={user} navigate={navigate} profileAuthor={profileAuthor} />
       case 'business':
         return <BusinessPage key="business" navigate={navigate} user={user} />
+      case 'magazineDetail':
+        return <MagazineDetailPage key="magazineDetail" ebook={navParams.ebook} navigate={navigate} user={user} />
+      case 'supplierDetail':
+        return <SupplierDetailPage key="supplierDetail" company={navParams.company} navigate={navigate} user={user} />
+      case 'productDetail':
+        return <ProductDetailPage key="productDetail" product={navParams.product} navigate={navigate} user={user} />
+      case 'talentDetail':
+        return <TalentDetailPage key="talentDetail" talentUser={navParams.talentUser} navigate={navigate} user={user} />
+      case 'myListings':
+        return <MyListingsPage key="myListings" navigate={navigate} user={user} />
       case 'notifications':
         return <NotificationsPage key="notifications" navigate={navigate} />
       case 'post':
-        return <PostDiscussionPage key="post" postId={navParams.postId} navigate={navigate} />
+        return <PostDetailPage key="post" postId={navParams.postId} navigate={navigate} />
       case 'bookmarks':
         return <BookmarksPage key="bookmarks" navigate={navigate} />
       case 'explore':
@@ -143,17 +187,17 @@ export default function App() {
   }
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: '#05050A', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-deep, #020617)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
       <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
         style={{ width: 32, height: 32, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#00D2FF', borderRadius: '50%' }} />
     </div>
   )
 
-  const showBottomNav = mainPages.includes(currentPage) || subPages.includes(currentPage)
-
   const BOTTOM_NAV_HEIGHT = 72
 
   return (
+    <ToastProvider navigate={navigate}>
+    <MessageToastProvider>
     <div className="app-container" style={{ background: 'var(--bg-color)', height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <AnimatePresence mode="wait">
         <motion.div
@@ -164,12 +208,20 @@ export default function App() {
           transition={{ duration: 0.4, ease: "easeInOut" }}
           style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}
         >
-          {renderPage()}
+          <Suspense fallback={
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+              <div style={{ width: 28, height: 28, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#00D2FF', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            </div>
+          }>
+            {renderPage()}
+          </Suspense>
         </motion.div>
       </AnimatePresence>
       {showBottomNav && (
-        <BottomNav currentPage={currentPage} navigate={navigate} />
+        <BottomNav currentPage={currentPage} navigate={navigate} unreadCount={getTotalUnread()} hidden={navHidden} />
       )}
     </div>
+    </MessageToastProvider>
+    </ToastProvider>
   )
 }

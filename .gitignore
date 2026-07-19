@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -29,9 +34,11 @@ vite_err.txt
 vite_log.txt
 vite_out.txt
 
+# Server logs
+backend/server.log
+server/server.log
+
 # Separate project folders
 neutron-marketplace/
 neutron\ messages/
 neutron-graphs\ \(1\)/
-
-

@@ -1,3 +1,8 @@
+import type { EncryptedEnvelope, CryptoLogEntry } from './crypto/types';
+
+export type { EncryptedEnvelope, CryptoLogEntry };
+export type { CryptoLogEntry as CryptographicLog };
+
 export interface UserProfile {
   id: string;
   username: string;
@@ -22,26 +27,25 @@ export interface Attachment {
   type: string;
   size: string;
   url?: string;
-  rawBytesSimulated?: string; // Hex representation of encrypted payload
 }
 
 export interface Message {
   id: string;
   senderId: string;
   recipientId: string;
-  text: string; // Plaintext when decrypted
-  encryptedPayload: string; // Base64 or Hex mock ciphertext
+  text: string;
   timestamp: Date | string;
   type: MessageType;
   attachment?: Attachment;
-  voiceDuration?: string; // If voice
+  voiceDuration?: string;
   reactions: MessageReaction[];
   status: 'sending' | 'delivered' | 'read';
-  disappearingTimer?: number; // In seconds (undefined or 0 means infinite)
+  disappearingTimer?: number;
   readAt?: Date;
-  scrambled?: boolean; // For typewriter/decryption glitch effect
   deletedForMe?: boolean;
   deletedForEveryone?: boolean;
+  encryptedEnvelope?: EncryptedEnvelope;
+  isEncrypted?: boolean;
 }
 
 export interface Conversation {
@@ -51,11 +55,15 @@ export interface Conversation {
   unreadCount: number;
   sharedEncryptionKey: string;
   keyExchangeCompleted: boolean;
-  disappearingSetting: number; // 0 = permanent, or seconds: 5, 30, 60
+  disappearingSetting: number;
   isBlocked: boolean;
   isReported: boolean;
   isGroup?: boolean;
   groupMembers?: string[];
+  isE2EEEnabled?: boolean;
+  peerPublicKey?: string;
+  localFingerprint?: string;
+  peerFingerprint?: string;
 }
 
 export interface ActiveSession {
@@ -65,12 +73,4 @@ export interface ActiveSession {
   ipAddress: string;
   lastActive: string;
   isCurrent: boolean;
-}
-
-export interface CryptographicLog {
-  id: string;
-  timestamp: string;
-  type: 'keygen' | 'handshake' | 'encrypt' | 'decrypt' | 'ratchet';
-  details: string;
-  algorithm: string;
 }

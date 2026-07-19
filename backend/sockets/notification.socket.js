@@ -1,4 +1,4 @@
-const Notification = require('../models/Mongoose');
+const Notification = require('../models/Notification.model');
 
 module.exports = (io, socket) => {
   socket.on('notification:read', async ({ notificationId }) => {
@@ -13,7 +13,7 @@ module.exports = (io, socket) => {
   socket.on('notification:read-all', async () => {
     try {
       await Notification.updateMany(
-        { user: socket.userId, read: false },
+        { receiver: socket.userId, read: false },
         { read: true }
       );
       socket.emit('notification:read-all');

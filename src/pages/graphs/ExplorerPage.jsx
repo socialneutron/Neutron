@@ -356,7 +356,7 @@ export default function ExplorerPage({ navigate, user }) {
                     variants={cardHover}
                     initial="rest"
                     whileHover="hover"
-                    onClick={() => navigate('profile', { author: { name: c.name, handle: c.handle, avatar: c.avatar } })}
+                    onClick={() => navigate('profile', { author: { id: c.id, name: c.name, handle: c.handle, avatar: c.avatar, verified: c.verified } })}
                     style={{
                       background: C.card,
                       border: `1px solid ${C.border}`,

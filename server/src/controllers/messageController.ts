@@ -9,7 +9,6 @@ export async function send(req: Request, res: Response, next: NextFunction) {
       sender_id: req.user!.userId,
     })
 
-    const participantIds = await messageService.getMessageParticipants(req.body.conversation_id)
     broadcastToConversation(req.body.conversation_id, req.user!.userId, {
       event: 'new_message',
       conversation_id: req.body.conversation_id,

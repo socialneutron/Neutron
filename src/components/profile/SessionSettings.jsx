@@ -72,7 +72,7 @@ export default function SessionSettings({ onNavigate }) {
     <div style={{ minHeight: '100vh', background: '#05050A', padding: '40px 20px' }}>
       <div style={{ maxWidth: '720px', margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px' }}>
-          <button onClick={() => onNavigate('login')} style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(7,17,36,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,210,255,0.1)', color: '#6b7280', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+          <button onClick={() => onNavigate('settings')} style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(7,17,36,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,210,255,0.1)', color: '#6b7280', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
             <ArrowLeft size={20} />
           </button>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>

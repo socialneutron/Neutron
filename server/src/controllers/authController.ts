@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import * as authService from '../services/authService'
+import { pool } from '../database/pool'
 
 export async function signup(req: Request, res: Response, next: NextFunction) {
   try {
@@ -58,6 +59,29 @@ export async function resetPassword(req: Request, res: Response, next: NextFunct
 export async function verifyEmail(req: Request, res: Response, next: NextFunction) {
   try {
     const result = await authService.verifyEmail(req.body.token)
+    res.json({ success: true, data: result })
+  } catch (err) { next(err) }
+}
+
+export async function checkUsername(req: Request, res: Response, next: NextFunction) {
+  try {
+    const q = (req.query.q as string || '').trim().toLowerCase()
+    if (q.length < 2) {
+      res.json({ success: true, data: { available: null } })
+      return
+    }
+    const result = await pool.query('SELECT id FROM users WHERE LOWER(username) = $1', [q])
+    res.json({ success: true, data: { available: result.rows.length === 0 } })
+  } catch (err) { next(err) }
+}
+
+export async function oauthLogin(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await authService.oauthLogin(
+      req.body,
+      req.headers['user-agent'],
+      req.ip
+    )
     res.json({ success: true, data: result })
   } catch (err) { next(err) }
 }

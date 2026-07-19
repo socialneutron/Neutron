@@ -28,10 +28,14 @@ const sendMessage = asyncHandler(async (req, res) => {
     throw new ApiError(403, 'You are blocked by this user.');
   }
 
+  const { encryptedEnvelope, isEncrypted } = req.body;
+
   const msgData = {
     sender: req.user._id,
     receiver: receiverId,
     message: text || '',
+    isEncrypted: !!isEncrypted,
+    encryptedEnvelope: isEncrypted ? encryptedEnvelope : undefined,
   };
 
   // Handle media upload

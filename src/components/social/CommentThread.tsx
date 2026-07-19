@@ -4,6 +4,7 @@ import { Heart, MessageCircle, Trash2, Share2, Bookmark, Flag, Copy, Languages, 
 import { useSupabaseAuth } from '../../context/SupabaseAuthContext'
 import { likeService, commentService, notificationService } from '../../services'
 import type { CommentWithAuthor, Comment } from '../../types/database'
+import { timeAgo } from '@/lib/timeAgo'
 import RichCommentComposer from './RichCommentComposer'
 
 const C = {
@@ -239,7 +240,7 @@ export default function CommentThread({
 
         {/* Avatar */}
         <div
-          onClick={() => navigate('profile', { author: { name: comment.author?.display_name, handle: `@${comment.author?.username}`, avatar: comment.author?.avatar_url, verified: comment.author?.is_verified } })}
+          onClick={() => navigate('profile', { author: { id: comment.author_id, name: comment.author?.display_name, handle: `@${comment.author?.username}`, avatar: comment.author?.avatar_url, verified: comment.author?.is_verified } })}
           style={{
             width: avatarSize, height: avatarSize, borderRadius: '50%',
             background: comment.author?.avatar_url ? `url(${comment.author.avatar_url}) center/cover` : `linear-gradient(135deg, ${C.cyan}60, ${C.purple}60)`,
@@ -259,7 +260,7 @@ export default function CommentThread({
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
             <span
               style={{ fontSize: nameFontSize, fontWeight: 700, color: C.text, cursor: 'pointer' }}
-              onClick={() => navigate('profile', { author: { name: comment.author?.display_name, handle: `@${comment.author?.username}` } })}
+              onClick={() => navigate('profile', { author: { id: comment.author_id, name: comment.author?.display_name, handle: `@${comment.author?.username}`, verified: comment.author?.is_verified } })}
             >
               {comment.author?.display_name}
             </span>

@@ -86,7 +86,7 @@ const refresh = asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Refresh token not found.');
   }
 
-  const { user, accessToken, newRefreshToken } = await rotateRefreshToken(refreshToken, res);
+  const { user, accessToken, refreshToken: newRefreshToken } = await rotateRefreshToken(refreshToken, res);
 
   res
     .status(200)
@@ -128,7 +128,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
 });
 
 const resetPassword = asyncHandler(async (req, res) => {
-  const { token } = req.query;
+  const { token } = req.params;
   const { password } = req.body;
 
   if (!token) {
@@ -177,6 +177,16 @@ const getMe = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, { user: req.user }, 'User fetched.'));
 });
 
+const checkUsername = asyncHandler(async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.trim().length < 2) {
+    return res.status(200).json(new ApiResponse(200, { available: null }, 'Query too short.'));
+  }
+  const username = q.trim().toLowerCase();
+  const existing = await User.findOne({ username }).select('_id').lean();
+  res.status(200).json(new ApiResponse(200, { available: !existing }, 'Username check complete.'));
+});
+
 module.exports = {
   register,
   login,
@@ -185,4 +195,5 @@ module.exports = {
   forgotPassword,
   resetPassword,
   getMe,
+  checkUsername,
 };

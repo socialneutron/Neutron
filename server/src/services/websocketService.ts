@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import jwt from 'jsonwebtoken'
 import { config } from '../config'
 import { logger } from '../utils/logger'
+import { queryMany } from '../database'
 import type { JwtPayload } from '../types'
 
 interface AuthenticatedSocket extends WebSocket {
@@ -102,22 +103,28 @@ function handleMessage(ws: AuthenticatedSocket, data: any) {
   }
 }
 
-export function broadcastToConversation(
+export async function broadcastToConversation(
   conversationId: string,
   senderId: string,
   data: any,
   excludeSender = true,
 ) {
+  const rows = await queryMany(
+    'SELECT user_id FROM participants WHERE conversation_id = $1',
+    [conversationId]
+  )
+  const participantIds = rows.map((r: any) => r.user_id)
   const message = JSON.stringify(data)
-
-  connections.forEach((sockets, userId) => {
-    if (excludeSender && userId === senderId) return
+  for (const uid of participantIds) {
+    if (excludeSender && uid === senderId) continue
+    const sockets = connections.get(uid)
+    if (!sockets) continue
     for (const ws of sockets) {
       if (ws.readyState === WebSocket.OPEN) {
         try { ws.send(message) } catch { /* skip dead socket */ }
       }
     }
-  })
+  }
 }
 
 export function broadcastToUsers(userIds: string[], data: any) {

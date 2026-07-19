@@ -3,10 +3,19 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 import {
   Plus, Minus, Trash2, GripVertical, ArrowLeft, PanelLeftClose, PanelLeft,
-  Grid3X3, Square, Shapes, MousePointer2,
-  Circle, Save, Upload, Clock, DollarSign, Building2, Pencil, Zap,
-  RotateCcw,
+  Grid3X3, Square, Shapes, MousePointer2, Image as ImageIcon,
+  Circle, Save, Upload, Pencil,
+  RotateCcw, Camera, Undo2, Redo2, Bot, LayoutTemplate,
+  Triangle, Pentagon, Hexagon, Octagon, Star, RectangleHorizontal,
+  Cylinder, Cloud, FileText, ChevronDown, ChevronRight, BarChart3,
 } from 'lucide-react'
+
+import WorkflowChat from '../components/WorkflowChat'
+import WorkflowTemplates from '../components/WorkflowTemplates'
+import BusinessTracker from '../components/business/BusinessTracker'
+import PdfLibraryView from '../components/pdfreader/PdfLibraryView'
+import PdfReaderScreen from '../components/pdfreader/PdfReaderScreen'
+import { useWorkflowHistory } from '../hooks/useWorkflowHistory'
 
 const C = {
   bg: '#05050A',
@@ -17,7 +26,6 @@ const C = {
   green: '#34D399',
   text: '#f1f5f9',
   muted: '#6b7280',
-  tagBg: 'rgba(255,255,255,0.03)',
   tagBdr: 'rgba(255,255,255,0.08)',
 }
 
@@ -70,6 +78,162 @@ const SHAPES = {
     borderRadius: 0,
     portAdjust: {},
     contentPad: '28px 18px',
+  },
+  image: {
+    label: 'Photo',
+    icon: ImageIcon,
+    width: 200, height: 160,
+    outPort: { x: 0.5, y: 1 },
+    inPort: { x: 0.5, y: 0 },
+    clipPath: null,
+    borderRadius: 10,
+    portAdjust: {},
+    contentPad: '0',
+  },
+  stadium: {
+    label: 'Start/End',
+    icon: RectangleHorizontal,
+    width: 200, height: 62,
+    outPort: { x: 0.5, y: 1 },
+    inPort: { x: 0.5, y: 0 },
+    clipPath: null,
+    borderRadius: 31,
+    portAdjust: {},
+    contentPad: '6px 20px',
+  },
+  triangle: {
+    label: 'Triangle',
+    icon: Triangle,
+    width: 200, height: 170,
+    outPort: { x: 0.5, y: 1 },
+    inPort: { x: 0.5, y: 0 },
+    clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)',
+    borderRadius: 0,
+    portAdjust: {
+      top: { x: 0.5, y: 0 },
+      bottom: { x: 0.5, y: 1 },
+      left: { x: 0.125, y: 0.75 },
+      right: { x: 0.875, y: 0.75 },
+    },
+    contentPad: '60px 20px 16px',
+  },
+  pentagon: {
+    label: 'Pentagon',
+    icon: Pentagon,
+    width: 200, height: 185,
+    outPort: { x: 0.5, y: 1 },
+    inPort: { x: 0.5, y: 0 },
+    clipPath: 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)',
+    borderRadius: 0,
+    portAdjust: {
+      top: { x: 0.5, y: 0 },
+      bottom: { x: 0.5, y: 1 },
+      left: { x: 0, y: 0.38 },
+      right: { x: 1, y: 0.38 },
+    },
+    contentPad: '40px 20px 30px',
+  },
+  hexagon: {
+    label: 'Hexagon',
+    icon: Hexagon,
+    width: 210, height: 185,
+    outPort: { x: 0.5, y: 1 },
+    inPort: { x: 0.5, y: 0 },
+    clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)',
+    borderRadius: 0,
+    portAdjust: {
+      top: { x: 0.5, y: 0 },
+      bottom: { x: 0.5, y: 1 },
+      left: { x: 0, y: 0.5 },
+      right: { x: 1, y: 0.5 },
+    },
+    contentPad: '36px 30px',
+  },
+  octagon: {
+    label: 'Octagon',
+    icon: Octagon,
+    width: 200, height: 185,
+    outPort: { x: 0.5, y: 1 },
+    inPort: { x: 0.5, y: 0 },
+    clipPath: 'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)',
+    borderRadius: 0,
+    portAdjust: {
+      top: { x: 0.5, y: 0 },
+      bottom: { x: 0.5, y: 1 },
+      left: { x: 0, y: 0.5 },
+      right: { x: 1, y: 0.5 },
+    },
+    contentPad: '36px 24px',
+  },
+  star: {
+    label: 'Star',
+    icon: Star,
+    width: 200, height: 190,
+    outPort: { x: 0.5, y: 1 },
+    inPort: { x: 0.5, y: 0 },
+    clipPath: 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)',
+    borderRadius: 0,
+    portAdjust: {
+      top: { x: 0.5, y: 0 },
+      bottom: { x: 0.5, y: 0.91 },
+      left: { x: 0.02, y: 0.35 },
+      right: { x: 0.98, y: 0.35 },
+    },
+    contentPad: '50px 30px 40px',
+  },
+  cylinder: {
+    label: 'Database',
+    icon: Cylinder,
+    width: 200, height: 130,
+    outPort: { x: 0.5, y: 1 },
+    inPort: { x: 0.5, y: 0 },
+    clipPath: 'polygon(0% 15%, 5% 8%, 50% 0%, 95% 8%, 100% 15%, 100% 85%, 95% 92%, 50% 100%, 5% 92%, 0% 85%)',
+    borderRadius: 0,
+    portAdjust: {},
+    contentPad: '28px 16px',
+  },
+  cloud: {
+    label: 'External',
+    icon: Cloud,
+    width: 220, height: 130,
+    outPort: { x: 0.5, y: 1 },
+    inPort: { x: 0.5, y: 0 },
+    clipPath: 'polygon(25% 70%, 12% 55%, 15% 38%, 28% 25%, 42% 18%, 58% 18%, 72% 25%, 85% 38%, 88% 55%, 75% 70%)',
+    borderRadius: 0,
+    portAdjust: {
+      top: { x: 0.5, y: 0.18 },
+      bottom: { x: 0.5, y: 0.7 },
+      left: { x: 0.12, y: 0.55 },
+      right: { x: 0.88, y: 0.55 },
+    },
+    contentPad: '36px 30px 20px',
+  },
+  document: {
+    label: 'Document',
+    icon: FileText,
+    width: 200, height: 140,
+    outPort: { x: 0.5, y: 1 },
+    inPort: { x: 0.5, y: 0 },
+    clipPath: 'polygon(0% 0%, 85% 0%, 100% 15%, 100% 100%, 0% 100%)',
+    borderRadius: 0,
+    portAdjust: {},
+    contentPad: '16px 16px',
+  },
+  pill: {
+    label: 'Delay',
+    icon: Circle,
+    width: 200, height: 100,
+    outPort: { x: 0.5, y: 1 },
+    inPort: { x: 0.5, y: 0 },
+    clipPath: null,
+    borderRadius: 50,
+    portAdjust: {
+      top: { x: 0.5, y: 0 },
+      bottom: { x: 0.5, y: 1 },
+      left: { x: 0, y: 0.5 },
+      right: { x: 1, y: 0.5 },
+    },
+    contentPad: '6px 16px',
   },
 }
 
@@ -157,7 +321,12 @@ function getConnectionPath(fromTag, toTag, fromPort = 'bottom', toPort = 'top') 
 
 
 export default function WorkflowPage({ navigate }) {
-  const [tags, setTags] = useState([
+  const {
+    tags, setTags,
+    connections, setConnections,
+    nextId, setNextId,
+    undo, redo, canUndo, canRedo,
+  } = useWorkflowHistory([
     { id: '1', text: 'Define Objective', x: 260, y: 40, shape: 'rectangle', duration: '', cost: '', department: '', app: 'google' },
     { id: '2', text: 'Gather Requirements', x: 260, y: 120, shape: 'rectangle', duration: '3d', cost: '5000', department: 'engineering', app: 'google' },
     { id: '3', text: 'Feasible?', x: 260, y: 200, shape: 'diamond', duration: '1d', cost: '2000', department: 'finance', app: '' },
@@ -166,8 +335,7 @@ export default function WorkflowPage({ navigate }) {
     { id: '6', text: 'Implement', x: 80, y: 400, shape: 'rectangle', duration: '10d', cost: '15000', department: 'engineering', app: 'hubspot' },
     { id: '7', text: 'Test & Validate', x: 80, y: 480, shape: 'rectangle', duration: '4d', cost: '6000', department: 'marketing', app: '' },
     { id: '8', text: 'Deploy', x: 80, y: 560, shape: 'rectangle', duration: '2d', cost: '4000', department: 'operations', app: '' },
-  ])
-  const [connections, setConnections] = useState([
+  ], [
     { from: '1', to: '2', fromPort: 'bottom', toPort: 'top', label: '' },
     { from: '2', to: '3', fromPort: 'bottom', toPort: 'top', label: '' },
     { from: '3', to: '4', fromPort: 'bottom', toPort: 'top', label: 'Yes' },
@@ -175,8 +343,7 @@ export default function WorkflowPage({ navigate }) {
     { from: '4', to: '6', fromPort: 'bottom', toPort: 'top', label: '' },
     { from: '6', to: '7', fromPort: 'bottom', toPort: 'top', label: '' },
     { from: '7', to: '8', fromPort: 'bottom', toPort: 'top', label: '' },
-  ])
-  const [nextId, setNextId] = useState(9)
+  ], 9)
   const [selectedTag, setSelectedTag] = useState(null)
   const [hoveredTag, setHoveredTag] = useState(null)
   const [dragging, setDragging] = useState(null)
@@ -195,11 +362,17 @@ export default function WorkflowPage({ navigate }) {
   const [gridSnap, setGridSnap] = useState(true)
   const [selectedConnection, setSelectedConnection] = useState(null)
   const [editingConnectionLabel, setEditingConnectionLabel] = useState('')
+  const [sidebarTab, setSidebarTab] = useState('tools')
+  const [activeView, setActiveView] = useState(null)
   const [isDrawingNode, setIsDrawingNode] = useState(false)
   const [drawStart, setDrawStart] = useState({ x: 0, y: 0 })
   const [drawCurrent, setDrawCurrent] = useState({ x: 0, y: 0 })
   const [drawShapeMenu, setDrawShapeMenu] = useState(null)
   const drawRef = useRef({ isDrawingNode: false, start: { x: 0, y: 0 }, current: { x: 0, y: 0 } })
+  const [photoAssets, setPhotoAssets] = useState([])
+  const [draggingAsset, setDraggingAsset] = useState(null)
+  const [dragOverCanvas, setDragOverCanvas] = useState(false)
+  const [selectedPdf, setSelectedPdf] = useState(null)
 
   const canvasRef = useRef(null)
   const tagRefs = useRef({})
@@ -208,14 +381,19 @@ export default function WorkflowPage({ navigate }) {
 
   useEffect(() => { tagsRef.current = tags }, [tags])
 
+  useEffect(() => {
+    if (!Array.isArray(tags)) setTags([])
+    if (!Array.isArray(connections)) setConnections([])
+  }, [tags, connections, setTags, setConnections])
+
   const snap = useCallback((val) => gridSnap ? Math.round(val / 32) * 32 : val, [gridSnap])
 
   const addTag = useCallback((shape = 'rectangle') => {
     const cfg = SHAPES[shape] || SHAPES.rectangle
     const vw = canvasRef.current?.clientWidth || 600
     const vh = canvasRef.current?.clientHeight || 400
-    const cx = vw / 2 - panOffset.x - cfg.width / 2
-    const cy = vh / 2 - panOffset.y - cfg.height / 2
+    const cx = (vw / 2 - panOffset.x) / scale - cfg.width / 2
+    const cy = (vh / 2 - panOffset.y) / scale - cfg.height / 2
     const newTag = {
       id: String(nextId),
       text: shape === 'diamond' ? 'New Decision' : shape === 'parallelogram' ? 'New I/O' : 'New Step',
@@ -227,12 +405,12 @@ export default function WorkflowPage({ navigate }) {
       department: '',
       app: '',
     }
-    setTags(prev => [...prev, newTag])
+    setTags(prev => [...(Array.isArray(prev) ? prev : []), newTag])
     setNextId(prev => prev + 1)
     setSelectedTag(newTag.id)
     setEditing(newTag.id)
     setEditText(newTag.text)
-  }, [nextId, snap, panOffset])
+  }, [nextId, snap, panOffset, scale])
 
   const updateTagPosition = useCallback((id, x, y) => {
     setTags(prev => prev.map(t => t.id === id ? { ...t, x, y } : t))
@@ -268,10 +446,14 @@ export default function WorkflowPage({ navigate }) {
     const origH = el.style.height
 
     const pad = 60
-    const minX = Math.min(...tags.map(t => t.x)) - pad
-    const minY = Math.min(...tags.map(t => t.y)) - pad
-    const maxX = Math.max(...tags.map(t => t.x + getShapeConfig(t).width)) + pad
-    const maxY = Math.max(...tags.map(t => t.y + getShapeConfig(t).height)) + pad
+    const bounds = tags.map(t => {
+      const cfg = getShapeConfig(t)
+      return { minX: t.x - pad, minY: t.y - pad, maxX: t.x + cfg.width + pad, maxY: t.y + cfg.height + pad }
+    })
+    const minX = Math.min(...bounds.map(b => b.minX))
+    const minY = Math.min(...bounds.map(b => b.minY))
+    const maxX = Math.max(...bounds.map(b => b.maxX))
+    const maxY = Math.max(...bounds.map(b => b.maxY))
     el.style.overflow = 'visible'
     el.style.width = `${maxX - minX}px`
     el.style.height = `${maxY - minY}px`
@@ -332,9 +514,15 @@ export default function WorkflowPage({ navigate }) {
         const entry = zip.file('workflow.json')
         if (!entry) return
         const data = JSON.parse(await entry.async('string'))
-        if (data.tags) setTags(data.tags.map(t => ({ duration: '', cost: '', department: '', app: '', ...t })))
-        if (data.connections) setConnections(data.connections.map(c => ({ fromPort: 'bottom', toPort: 'top', label: '', ...c })))
-        if (data.nextId) setNextId(data.nextId)
+        if (data.tags) {
+          setTags(data.tags.map(t => ({ duration: '', cost: '', department: '', app: '', ...t })))
+          setConnections(data.connections ? data.connections.map(c => ({ fromPort: 'bottom', toPort: 'top', label: '', ...c })) : [])
+          setNextId(data.nextId || data.tags.length + 1)
+          setSelectedTag(null)
+          setSelectedConnection(null)
+          setEditing(null)
+          setEditText('')
+        }
       } catch (err) { console.error('Import failed', err) }
     }
     input.click()
@@ -381,8 +569,8 @@ export default function WorkflowPage({ navigate }) {
       return
     }
     if (dragging) {
-      let x = e.clientX - dragOffset.x
-      let y = e.clientY - dragOffset.y
+      let x = (e.clientX - dragOffset.x - panOffset.x) / scale
+      let y = (e.clientY - dragOffset.y - panOffset.y) / scale
       if (gridSnap) {
         const tag = tagsRef.current.find(t => t.id === dragging)
         if (tag) {
@@ -463,20 +651,17 @@ export default function WorkflowPage({ navigate }) {
     const tag = tags.find(t => t.id === tagId)
     if (!tag) return
     setDragging(tagId)
-    setDragOffset({ x: e.clientX - tag.x, y: e.clientY - tag.y })
+    setDragOffset({ x: e.clientX - tag.x * scale - panOffset.x, y: e.clientY - tag.y * scale - panOffset.y })
     setSelectedTag(tagId)
-  }, [tags])
+    setEditing(null)
+    setEditText('')
+  }, [tags, scale, panOffset])
 
   const handleTagClick = useCallback((e, tagId) => {
     e.stopPropagation()
     setSelectedTag(tagId)
     setSelectedConnection(null)
-    const tag = tags.find(t => t.id === tagId)
-    if (tag) {
-      setEditing(tagId)
-      setEditText(tag.text)
-    }
-  }, [tags])
+  }, [])
 
   const handleTagDoubleClick = useCallback((e, tagId) => {
     e.stopPropagation()
@@ -501,7 +686,7 @@ export default function WorkflowPage({ navigate }) {
     if (connectingFrom) {
       const dup = connections.some(c => c.from === connectingFrom && c.to === tagId && c.fromPort === connectingPort && c.toPort === port)
       if (!dup) {
-        setConnections(prev => [...prev, { from: connectingFrom, to: tagId, fromPort: connectingPort, toPort: port, label: '' }])
+        setConnections(prev => [...(Array.isArray(prev) ? prev : []), { from: connectingFrom, to: tagId, fromPort: connectingPort, toPort: port, label: '' }])
       }
     }
     setConnectingFrom(null)
@@ -529,6 +714,152 @@ export default function WorkflowPage({ navigate }) {
       ))
     }
   }, [selectedConnection, editingConnectionLabel])
+
+  // ── AI Actions Handler ──
+  const applyAIActions = useCallback((actions) => {
+    const safeActions = Array.isArray(actions) ? actions : [];
+    for (const action of safeActions) {
+      switch (action.type) {
+        case 'add_node': {
+          const shape = action.shape || 'rectangle'
+          const cfg = SHAPES[shape] || SHAPES.rectangle
+          const vw = canvasRef.current?.clientWidth || 600
+          const vh = canvasRef.current?.clientHeight || 400
+          const newTag = {
+            id: String(nextId),
+            text: action.text || 'New Step',
+            x: snap((vw / 2 - panOffset.x) / scale - cfg.width / 2),
+            y: snap((vh / 2 - panOffset.y) / scale - cfg.height / 2),
+            shape,
+            duration: action.duration || '',
+            cost: action.cost || '',
+            department: action.department || '',
+            app: action.app || '',
+          }
+          setTags(prev => [...(Array.isArray(prev) ? prev : []), newTag])
+          setNextId(prev => prev + 1)
+          break
+        }
+        case 'edit_node': {
+          setTags(prev => prev.map(t => {
+            if (t.id !== action.id) return t
+            const updates = {}
+            if (action.text !== undefined) updates.text = action.text
+            if (action.duration !== undefined) updates.duration = action.duration
+            if (action.cost !== undefined) updates.cost = action.cost
+            if (action.department !== undefined) updates.department = action.department
+            if (action.app !== undefined) updates.app = action.app
+            return { ...t, ...updates }
+          }))
+          break
+        }
+        case 'delete_node': {
+          setTags(prev => prev.filter(t => t.id !== action.id))
+          setConnections(prev => prev.filter(c => c.from !== action.id && c.to !== action.id))
+          break
+        }
+        case 'add_connection': {
+          setConnections(prev => [...(Array.isArray(prev) ? prev : []), {
+            from: action.from,
+            to: action.to,
+            fromPort: action.fromPort || 'bottom',
+            toPort: action.toPort || 'top',
+            label: action.label || '',
+          }])
+          break
+        }
+        case 'delete_connection': {
+          setConnections(prev => prev.filter(c => !(c.from === action.from && c.to === action.to)))
+          break
+        }
+        case 'set_duration': {
+          setTags(prev => prev.map(t => t.id === action.id ? { ...t, duration: action.duration } : t))
+          break
+        }
+        case 'set_cost': {
+          setTags(prev => prev.map(t => t.id === action.id ? { ...t, cost: action.cost } : t))
+          break
+        }
+        case 'set_department': {
+          setTags(prev => prev.map(t => t.id === action.id ? { ...t, department: action.department } : t))
+          break
+        }
+      }
+    }
+  }, [nextId, snap, panOffset, scale, setTags, setConnections, setNextId])
+
+  // ── Template Handler ──
+  const handleTemplateSelect = useCallback((templateTags, templateConnections, templateNextId) => {
+    setTags(templateTags)
+    setConnections(templateConnections)
+    setNextId(templateNextId)
+    setSelectedTag(null)
+    setSelectedConnection(null)
+    setEditing(null)
+    setEditText('')
+  }, [setTags, setConnections, setNextId])
+
+  const handlePhotoDrop = useCallback((e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const files = Array.from(e.dataTransfer?.files || [])
+    const imageFiles = files.filter(f => f.type.startsWith('image/'))
+    imageFiles.forEach(file => {
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        const dataUrl = ev.target.result
+        const img = new window.Image()
+        img.onload = () => {
+          setPhotoAssets(prev => [...(Array.isArray(prev) ? prev : []), {
+            id: `asset-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            name: file.name,
+            src: dataUrl,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+          }])
+        }
+        img.src = dataUrl
+      }
+      reader.readAsDataURL(file)
+    })
+  }, [])
+
+  const handlePhotoDragStart = useCallback((e, asset) => {
+    e.dataTransfer.setData('application/neutron-photo', JSON.stringify(asset))
+    e.dataTransfer.effectAllowed = 'copy'
+    setDraggingAsset(asset)
+  }, [])
+
+  const handleCanvasDrop = useCallback((e) => {
+    e.preventDefault()
+    setDragOverCanvas(false)
+    const data = e.dataTransfer.getData('application/neutron-photo')
+    if (!data) return
+    try {
+      const asset = JSON.parse(data)
+      const rect = canvasRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const x = snap((e.clientX - rect.left - panOffset.x) / scale)
+      const y = snap((e.clientY - rect.top - panOffset.y) / scale)
+      const newTag = {
+        id: String(nextId),
+        text: asset.name || 'Photo',
+        x, y,
+        shape: 'image',
+        duration: '',
+        cost: '',
+        department: '',
+        app: '',
+        imageSrc: asset.src,
+        imageWidth: asset.width,
+        imageHeight: asset.height,
+      }
+      setTags(prev => [...(Array.isArray(prev) ? prev : []), newTag])
+      setNextId(prev => prev + 1)
+      setSelectedTag(newTag.id)
+    } catch (err) { console.error('Drop failed', err) }
+    setDraggingAsset(null)
+  }, [nextId, snap, panOffset, scale])
 
   const zoomIn = useCallback(() => {
     const el = canvasRef.current
@@ -593,10 +924,14 @@ export default function WorkflowPage({ navigate }) {
 
   const selectedTagData = tags.find(t => t.id === selectedTag)
 
-  const totalCost = tags.reduce((sum, t) => sum + (parseFloat(t.cost) || 0), 0)
-  const totalHours = tags.reduce((sum, t) => sum + parseHours(t.duration), 0)
-
   return (
+    <>
+    <style>{`
+      .workflow-sidebar::-webkit-scrollbar { width: 5px; }
+      .workflow-sidebar::-webkit-scrollbar-track { background: transparent; }
+      .workflow-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
+      .workflow-sidebar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+    `}</style>
     <div style={{
       flex: 1, width: '100%', overflow: 'hidden', position: 'relative',
       background: C.bg, display: 'flex', flexDirection: 'column',
@@ -617,37 +952,178 @@ export default function WorkflowPage({ navigate }) {
         }}>
           <ArrowLeft size={16} />
         </motion.button>
-        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, flex: 1 }}>
+        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, flexShrink: 0 }}>
           Workflow
         </h1>
-        <span style={{ fontSize: 11, color: C.muted }}>
-          {tags.length} nodes · {connections.length} connections
-        </span>
-        <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.95 }}
-          onClick={saveProject}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.cyan}30`,
-            background: `${C.cyan}10`, color: C.cyan, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-          }}
-        >
-          <Save size={13} /> Save
-        </motion.button>
-        <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.95 }}
-          onClick={importProject}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.cardBdr}`,
-            background: 'rgba(255,255,255,0.04)', color: C.text, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-          }}
-        >
-          <Upload size={13} /> Import
-        </motion.button>
+
+        {/* Back to selection */}
+        {activeView && (
+          <motion.button whileTap={{ scale: 0.9 }} onClick={() => setActiveView(null)} style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.cardBdr}`,
+            background: 'rgba(255,255,255,0.04)', color: C.muted,
+            fontSize: 11, fontWeight: 600, cursor: 'pointer',
+          }}>
+            <ArrowLeft size={12} /> Back
+          </motion.button>
+        )}
+
+        <div style={{ flex: 1 }} />
+
+        {activeView === 'canvas' && (<>
+          <span style={{ fontSize: 11, color: C.muted }}>
+            {tags.length} nodes · {connections.length} connections
+          </span>
+          <motion.button whileTap={{ scale: 0.9 }} onClick={undo} disabled={!canUndo}
+            style={{
+              background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.cardBdr}`,
+              borderRadius: 8, width: 30, height: 30,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: canUndo ? 'pointer' : 'default', color: canUndo ? C.text : C.muted, opacity: canUndo ? 1 : 0.3,
+            }}>
+            <Undo2 size={13} />
+          </motion.button>
+          <motion.button whileTap={{ scale: 0.9 }} onClick={redo} disabled={!canRedo}
+            style={{
+              background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.cardBdr}`,
+              borderRadius: 8, width: 30, height: 30,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: canRedo ? 'pointer' : 'default', color: canRedo ? C.text : C.muted, opacity: canRedo ? 1 : 0.3,
+            }}>
+            <Redo2 size={13} />
+          </motion.button>
+          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.95 }}
+            onClick={saveProject}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.cyan}30`,
+              background: `${C.cyan}10`, color: C.cyan, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            <Save size={13} /> Save
+          </motion.button>
+          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.95 }}
+            onClick={importProject}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.cardBdr}`,
+              background: 'rgba(255,255,255,0.04)', color: C.text, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            <Upload size={13} /> Import
+          </motion.button>
+        </>)}
       </div>
 
       {/* Body: sidebar + canvas */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
-        {/* ─── SIDEBAR ─── */}
+        {/* ─── LANDING SCREEN ─── */}
+        {!activeView && (
+          <div style={{
+            flex: 1, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 24, padding: 40,
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: 8 }}>
+              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>
+                What would you like to do?
+              </h2>
+              <p style={{ margin: '6px 0 0', fontSize: 13, color: C.muted }}>
+                Choose a tool to get started
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <motion.button
+                whileHover={{ scale: 1.03, y: -2 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setActiveView('canvas')}
+                style={{
+                  width: 240, padding: '28px 24px', borderRadius: 14,
+                  border: `1px solid ${C.cardBdr}`, background: C.card,
+                  cursor: 'pointer', textAlign: 'left',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+                  transition: 'border-color 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = `${C.cyan}40` }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.cardBdr }}
+              >
+                <div style={{
+                  width: 52, height: 52, borderRadius: 14,
+                  background: `${C.cyan}12`, border: `1px solid ${C.cyan}30`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Grid3X3 size={24} color={C.cyan} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>Canvas</div>
+                  <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
+                    Flowcharts, diagrams, and visual workflows with drag-and-drop
+                  </div>
+                </div>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.03, y: -2 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setActiveView('tracker')}
+                style={{
+                  width: 240, padding: '28px 24px', borderRadius: 14,
+                  border: `1px solid ${C.cardBdr}`, background: C.card,
+                  cursor: 'pointer', textAlign: 'left',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+                  transition: 'border-color 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = `${C.green}40` }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.cardBdr }}
+              >
+                <div style={{
+                  width: 52, height: 52, borderRadius: 14,
+                  background: `${C.green}12`, border: `1px solid ${C.green}30`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <BarChart3 size={24} color={C.green} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>Habit Tracker</div>
+                  <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
+                    Track daily business metrics, sales targets, and KPIs
+                  </div>
+                </div>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.03, y: -2 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setActiveView('pdfreader')}
+                style={{
+                  width: 240, padding: '28px 24px', borderRadius: 14,
+                  border: `1px solid ${C.cardBdr}`, background: C.card,
+                  cursor: 'pointer', textAlign: 'left',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+                  transition: 'border-color 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = `${C.purple}40` }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.cardBdr }}
+              >
+                <div style={{
+                  width: 52, height: 52, borderRadius: 14,
+                  background: `${C.purple}12`, border: `1px solid ${C.purple}30`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <FileText size={24} color={C.purple} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>PDF Reader</div>
+                  <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
+                    Upload a PDF and read it with highlights, notes, and word lookup
+                  </div>
+                </div>
+              </motion.button>
+            </div>
+          </div>
+        )}
+
+        {/* ─── SIDEBAR (only in canvas view) ─── */}
+        {activeView === 'canvas' && (
         <motion.aside
           animate={{ width: sidebarWidth }}
           transition={{ duration: 0.25, ease: 'easeInOut' }}
@@ -659,40 +1135,74 @@ export default function WorkflowPage({ navigate }) {
           }}
         >
           {sidebarOpen && (
-            <div style={{ flex: 1, padding: 14, display: 'flex', flexDirection: 'column', gap: 14, minWidth: 252, minHeight: 0 }}>
-              {/* Header */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: C.text, letterSpacing: '0.3px', textTransform: 'uppercase' }}>
-                  Canvas Tools
-                </span>
+            <div style={{ flex: 1, padding: 14, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 252, minHeight: 0, overflow: 'hidden' }}>
+              {/* Tab bar */}
+              <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: 2 }}>
+                {[
+                  { id: 'tools', icon: Grid3X3, label: 'Tools' },
+                  { id: 'ai', icon: Bot, label: 'AI' },
+                  { id: 'templates', icon: LayoutTemplate, label: 'Templates' },
+                  { id: 'selected', icon: MousePointer2, label: 'Selected' },
+                ].map(tab => (
+                  <button key={tab.id} onClick={() => setSidebarTab(tab.id)}
+                    style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                      padding: '5px 4px', borderRadius: 6, border: 'none',
+                      background: sidebarTab === tab.id ? `${C.cyan}15` : 'transparent',
+                      color: sidebarTab === tab.id ? C.cyan : C.muted,
+                      fontSize: 9, fontWeight: 600, cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}>
+                    <tab.icon size={11} />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Close button */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button onClick={() => setSidebarOpen(false)}
-                  style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 2, display: 'flex' }}
-                >
+                  style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 2, display: 'flex' }}>
                   <PanelLeftClose size={14} />
                 </button>
               </div>
 
-              {/* Add New Node */}
-              <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
-                Add New Node
-              </span>
+              {/* Tab content - scrollable */}
+              <div className="workflow-sidebar" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.08) transparent' }}>
 
-              {/* Quick shape inserts */}
-              <div style={{ display: 'flex', gap: 6 }}>
+              {sidebarTab === 'tools' && (<>
+
+              {/* ── SHAPES ── */}
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '3px 8px', borderRadius: 6,
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
+                fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+                letterSpacing: '0.5px', width: 'fit-content',
+              }}>
+                <Square size={10} />
+                Shapes
+              </div>
+
+              {/* Shape grid — 2 columns */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
                 {Object.entries(SHAPES).map(([key, cfg]) => (
-                  <motion.button key={key} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.9 }}
+                  <motion.button key={key} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.95 }}
                     onClick={() => addTag(key)}
                     title={`Add ${cfg.label}`}
                     style={{
-                      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                      padding: '8px 6px', borderRadius: 8, border: `1px solid ${C.cardBdr}`,
-                      background: 'rgba(255,255,255,0.03)', color: C.muted, cursor: 'pointer',
-                      fontSize: 9, fontWeight: 600, transition: 'border-color 0.15s, color 0.15s',
+                      display: 'flex', alignItems: 'center', gap: 7,
+                      padding: '7px 10px', borderRadius: 8,
+                      border: `1px solid ${C.cardBdr}`,
+                      background: 'rgba(255,255,255,0.03)',
+                      color: C.muted, cursor: 'pointer', textAlign: 'left',
+                      fontSize: 10, fontWeight: 600,
+                      transition: 'border-color 0.15s, color 0.15s, background 0.15s',
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = `${C.cyan}30`; e.currentTarget.style.color = C.cyan }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.cardBdr; e.currentTarget.style.color = C.muted }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = `${C.cyan}30`; e.currentTarget.style.color = C.cyan; e.currentTarget.style.background = `${C.cyan}08` }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.cardBdr; e.currentTarget.style.color = C.muted; e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
                   >
-                    <cfg.icon size={16} />
+                    <cfg.icon size={13} />
                     {cfg.label}
                   </motion.button>
                 ))}
@@ -701,11 +1211,27 @@ export default function WorkflowPage({ navigate }) {
               {/* Divider */}
               <div style={{ height: 1, background: C.cardBdr }} />
 
-              {/* Grid Snapping Toggle */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              {/* ── CANVAS ── */}
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '3px 8px', borderRadius: 6,
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
+                fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+                letterSpacing: '0.5px', width: 'fit-content',
+              }}>
+                <Grid3X3 size={10} />
+                Canvas
+              </div>
+
+              {/* Grid Snapping card */}
+              <div style={{
+                background: 'rgba(255,255,255,0.02)', borderRadius: 8,
+                padding: '8px 10px', border: `1px solid ${C.cardBdr}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Grid3X3 size={14} color={C.muted} />
-                  <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Grid Snapping</span>
+                  <Grid3X3 size={13} color={C.muted} />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: C.text }}>Grid Snapping</span>
                 </div>
                 <button
                   onClick={() => setGridSnap(!gridSnap)}
@@ -728,133 +1254,277 @@ export default function WorkflowPage({ navigate }) {
               {/* Divider */}
               <div style={{ height: 1, background: C.cardBdr }} />
 
-              {/* Selected node properties */}
-              {selectedTagData ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
-                    Selected Node
-                  </span>
-                  <div style={{
-                    background: 'rgba(255,255,255,0.03)', borderRadius: 8,
-                    padding: 10, border: `1px solid ${C.cardBdr}`,
-                  }}>
-                    {/* Notepad textarea */}
-                    <textarea
-                      autoFocus
-                      ref={el => {
-                        if (el && editing !== selectedTagData.id) {
-                          el.value = selectedTagData.text || ''
-                          el.style.height = 'auto'
-                          el.style.height = el.scrollHeight + 'px'
+              {/* ── PHOTOS ── */}
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '3px 8px', borderRadius: 6,
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
+                fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+                letterSpacing: '0.5px', width: 'fit-content',
+              }}>
+                <Camera size={10} />
+                Photos
+              </div>
+
+              <div
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
+                onDrop={handlePhotoDrop}
+                style={{
+                  border: `2px dashed ${C.cardBdr}`,
+                  borderRadius: 10,
+                  padding: '14px 12px',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                  cursor: 'pointer',
+                  transition: 'border-color 0.2s, background 0.2s',
+                  background: 'rgba(255,255,255,0.02)',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = `${C.cyan}40`; e.currentTarget.style.background = `${C.cyan}06` }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.cardBdr; e.currentTarget.style.background = 'rgba(255,255,255,0.02)' }}
+                onClick={() => {
+                  const input = document.createElement('input')
+                  input.type = 'file'
+                  input.accept = 'image/png,image/jpeg,image/jpg'
+                  input.multiple = true
+                  input.onchange = (ev) => {
+                    const files = Array.from(ev.target.files || [])
+                    files.forEach(file => {
+                      const reader = new FileReader()
+                      reader.onload = (rev) => {
+                        const dataUrl = rev.target.result
+                        const img = new window.Image()
+                        img.onload = () => {
+                          setPhotoAssets(prev => [...(Array.isArray(prev) ? prev : []), {
+                            id: `asset-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                            name: file.name,
+                            src: dataUrl,
+                            width: img.naturalWidth,
+                            height: img.naturalHeight,
+                          }])
                         }
-                      }}
-                      value={editing === selectedTagData.id ? editText : selectedTagData.text}
-                      onChange={e => {
-                        setEditText(e.target.value)
-                        setEditing(selectedTagData.id)
-                        e.target.style.height = 'auto'
-                        e.target.style.height = e.target.scrollHeight + 'px'
-                        setTags(prev => prev.map(t => t.id === selectedTagData.id ? { ...t, text: e.target.value } : t))
-                      }}
-                      onBlur={saveEdit}
-                      onKeyDown={e => { if (e.key === 'Escape') { setEditing(null); setEditText('') } }}
-                      placeholder="Type node text..."
-                      style={{
-                        width: '100%', minHeight: 60, maxHeight: 200, overflowY: 'auto',
-                        background: 'rgba(0,0,0,0.4)',
-                        border: `1px solid ${C.cyan}40`, borderRadius: 6,
-                        padding: '8px 10px', textAlign: 'left',
-                        color: '#fff', fontSize: 11, fontWeight: 600,
-                        outline: 'none', fontFamily: 'inherit',
-                        lineHeight: 1.4, resize: 'none',
-                      }}
-                    />
+                        img.src = dataUrl
+                      }
+                      reader.readAsDataURL(file)
+                    })
+                  }
+                  input.click()
+                }}
+              >
+                <Camera size={18} color={C.muted} style={{ opacity: 0.4 }} />
+                <span style={{ fontSize: 10, color: C.muted, textAlign: 'center', lineHeight: 1.3 }}>
+                  Drop images or click to browse
+                </span>
+              </div>
 
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 8, marginTop: 6 }}>
-                      ID: {selectedTagData.id} · {SHAPES[selectedTagData.shape]?.label || 'Process'}
-                    </div>
-
-                    {/* Shape selector */}
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {Object.entries(SHAPES).map(([key, cfg]) => {
-                        const isActive = selectedTagData.shape === key
-                        return (
-                          <motion.button key={key} whileTap={{ scale: 0.9 }}
-                            onClick={() => changeShape(selectedTagData.id, key)}
-                            style={{
-                              flex: 1, padding: '5px 4px', borderRadius: 6, border: isActive ? `1px solid ${C.cyan}50` : `1px solid ${C.cardBdr}`,
-                              background: isActive ? `${C.cyan}10` : 'rgba(255,255,255,0.03)',
-                              color: isActive ? C.cyan : C.muted, fontSize: 9, fontWeight: 600, cursor: 'pointer',
-                              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                              transition: 'all 0.15s',
-                            }}
-                          >
-                            <cfg.icon size={12} />
-                            {cfg.label}
-                          </motion.button>
-                        )
-                      })}
-                    </div>
-
-                    {/* Actions */}
-                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                      <motion.button whileTap={{ scale: 0.9 }}
-                        onClick={(e) => { e.stopPropagation(); setShowConfirmDelete(selectedTagData.id) }}
-                        style={{
-                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                          padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(239,68,68,0.2)',
-                          background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                        }}
-                      >
-                        <Trash2 size={12} /> Delete
-                      </motion.button>
-                    </div>
-                  </div>
-                </div>
-              ) : selectedConnection ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
-                    Connection
-                  </span>
-                  <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: 10, border: `1px solid ${C.cardBdr}` }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>
-                      {tags.find(t => t.id === selectedConnection.from)?.text} → {tags.find(t => t.id === selectedConnection.to)?.text}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,0.03)', borderRadius: 6, padding: '4px 6px', border: `1px solid ${C.cardBdr}` }}>
-                      <Pencil size={11} color={C.muted} />
-                      <input value={editingConnectionLabel} onChange={e => setEditingConnectionLabel(e.target.value)}
-                        onBlur={saveConnectionLabel}
-                        onKeyDown={e => { if (e.key === 'Enter') saveConnectionLabel() }}
-                        placeholder="Label (e.g. Yes / No)"
-                        style={{ width: '100%', background: 'none', border: 'none', outline: 'none', color: C.text, fontSize: 10, fontWeight: 600 }}
-                      />
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                      <motion.button whileTap={{ scale: 0.9 }}
-                        onClick={() => { deleteConnection(selectedConnection.from, selectedConnection.to); setSelectedConnection(null) }}
-                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '5px 8px', borderRadius: 6, border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}
-                      >
-                        <Trash2 size={10} /> Remove
-                      </motion.button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
+              {photoAssets.length > 0 && (
                 <div style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-                  padding: '20px 10px', color: C.muted, fontSize: 11, textAlign: 'center',
+                  display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4,
+                  maxHeight: 160, overflowY: 'auto',
+                  padding: '2px 0',
                 }}>
-                  <MousePointer2 size={20} style={{ opacity: 0.3 }} />
-                  <span>Click a node or connection to edit</span>
+                  {photoAssets.map(asset => (
+                    <div
+                      key={asset.id}
+                      draggable
+                      onDragStart={(e) => handlePhotoDragStart(e, asset)}
+                      style={{
+                        position: 'relative', aspectRatio: '1', borderRadius: 6,
+                        overflow: 'hidden', cursor: 'grab', border: `1px solid ${C.cardBdr}`,
+                        transition: 'border-color 0.15s, transform 0.15s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = `${C.cyan}50`; e.currentTarget.style.transform = 'scale(1.05)' }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.cardBdr; e.currentTarget.style.transform = 'scale(1)' }}
+                    >
+                      <img src={asset.src} alt={asset.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }}
+                        draggable={false}
+                      />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setPhotoAssets(prev => prev.filter(a => a.id !== asset.id))
+                        }}
+                        style={{
+                          position: 'absolute', top: 2, right: 2,
+                          width: 16, height: 16, borderRadius: '50%',
+                          background: 'rgba(0,0,0,0.7)', border: 'none',
+                          color: '#fff', fontSize: 9, fontWeight: 700,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          cursor: 'pointer', opacity: 0.7, transition: 'opacity 0.15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = '1' }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = '0.7' }}
+                      >x</button>
+                    </div>
+                  ))}
                 </div>
               )}
 
+              </>)}
+
+              {sidebarTab === 'ai' && (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                  <WorkflowChat
+                    tags={tags}
+                    connections={connections}
+                    onApplyActions={applyAIActions}
+                  />
+                </div>
+              )}
+
+              {sidebarTab === 'templates' && (
+                <WorkflowTemplates onSelect={handleTemplateSelect} />
+              )}
+
+              {sidebarTab === 'selected' && (<>
+                {selectedTagData ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '3px 8px', borderRadius: 6,
+                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
+                      fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+                      letterSpacing: '0.5px', width: 'fit-content',
+                    }}>
+                      <MousePointer2 size={10} />
+                      Node Editor
+                    </div>
+                    <div style={{
+                      background: 'rgba(255,255,255,0.03)', borderRadius: 8,
+                      padding: 10, border: `1px solid ${C.cardBdr}`,
+                    }}>
+                      <textarea
+                        autoFocus
+                        ref={el => {
+                          if (el && editing !== selectedTagData.id) {
+                            el.value = selectedTagData.text || ''
+                            el.style.height = 'auto'
+                            el.style.height = el.scrollHeight + 'px'
+                          }
+                        }}
+                        value={editing === selectedTagData.id ? editText : selectedTagData.text}
+                        onChange={e => {
+                          setEditText(e.target.value)
+                          setEditing(selectedTagData.id)
+                          e.target.style.height = 'auto'
+                          e.target.style.height = e.target.scrollHeight + 'px'
+                          setTags(prev => prev.map(t => t.id === selectedTagData.id ? { ...t, text: e.target.value } : t))
+                        }}
+                        onBlur={saveEdit}
+                        onKeyDown={e => { if (e.key === 'Escape') { setEditing(null); setEditText('') } }}
+                        placeholder="Type node text..."
+                        style={{
+                          width: '100%', minHeight: 60, maxHeight: 200, overflowY: 'auto',
+                          background: 'rgba(0,0,0,0.4)',
+                          border: `1px solid ${C.cyan}40`, borderRadius: 6,
+                          padding: '8px 10px', textAlign: 'left',
+                          color: '#fff', fontSize: 11, fontWeight: 600,
+                          outline: 'none', fontFamily: 'inherit',
+                          lineHeight: 1.4, resize: 'none',
+                        }}
+                      />
+
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 8, marginTop: 6 }}>
+                        ID: {selectedTagData.id} · {SHAPES[selectedTagData.shape]?.label || 'Process'}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {Object.entries(SHAPES).map(([key, cfg]) => {
+                          const isActive = selectedTagData.shape === key
+                          return (
+                            <motion.button key={key} whileTap={{ scale: 0.9 }}
+                              onClick={() => changeShape(selectedTagData.id, key)}
+                              style={{
+                                flex: 1, padding: '5px 4px', borderRadius: 6, border: isActive ? `1px solid ${C.cyan}50` : `1px solid ${C.cardBdr}`,
+                                background: isActive ? `${C.cyan}10` : 'rgba(255,255,255,0.03)',
+                                color: isActive ? C.cyan : C.muted, fontSize: 9, fontWeight: 600, cursor: 'pointer',
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                                transition: 'all 0.15s',
+                              }}
+                            >
+                              <cfg.icon size={12} />
+                              {cfg.label}
+                            </motion.button>
+                          )
+                        })}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                        <motion.button whileTap={{ scale: 0.9 }}
+                          onClick={(e) => { e.stopPropagation(); setShowConfirmDelete(selectedTagData.id) }}
+                          style={{
+                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                            padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(239,68,68,0.2)',
+                            background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          }}
+                        >
+                          <Trash2 size={12} /> Delete
+                        </motion.button>
+                      </div>
+                    </div>
+                  </div>
+                ) : selectedConnection ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '3px 8px', borderRadius: 6,
+                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
+                      fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+                      letterSpacing: '0.5px', width: 'fit-content',
+                    }}>
+                      <MousePointer2 size={10} />
+                      Connection
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: 10, border: `1px solid ${C.cardBdr}` }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>
+                        {tags.find(t => t.id === selectedConnection.from)?.text} → {tags.find(t => t.id === selectedConnection.to)?.text}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,0.03)', borderRadius: 6, padding: '4px 6px', border: `1px solid ${C.cardBdr}` }}>
+                        <Pencil size={11} color={C.muted} />
+                        <input value={editingConnectionLabel} onChange={e => setEditingConnectionLabel(e.target.value)}
+                          onBlur={saveConnectionLabel}
+                          onKeyDown={e => { if (e.key === 'Enter') saveConnectionLabel() }}
+                          placeholder="Label (e.g. Yes / No)"
+                          style={{ width: '100%', background: 'none', border: 'none', outline: 'none', color: C.text, fontSize: 10, fontWeight: 600 }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                        <motion.button whileTap={{ scale: 0.9 }}
+                          onClick={() => { deleteConnection(selectedConnection.from, selectedConnection.to); setSelectedConnection(null) }}
+                          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '5px 8px', borderRadius: 6, border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}
+                        >
+                          <Trash2 size={10} /> Remove
+                        </motion.button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                    padding: '40px 20px', color: C.muted, textAlign: 'center',
+                  }}>
+                    <div style={{
+                      width: 48, height: 48, borderRadius: 12,
+                      background: 'rgba(255,255,255,0.03)', border: `1px solid ${C.cardBdr}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <MousePointer2 size={20} style={{ opacity: 0.3 }} />
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>Nothing selected</span>
+                    <span style={{ fontSize: 11, lineHeight: 1.4 }}>
+                      Click a node or connection on the canvas to view and edit its properties
+                    </span>
+                  </div>
+                )}
+              </>)}
+
+            </div>
             </div>
           )}
         </motion.aside>
+        )}
 
         {/* Sidebar toggle button (when collapsed) */}
-        {!sidebarOpen && (
+        {activeView === 'canvas' && !sidebarOpen && (
           <button onClick={() => setSidebarOpen(true)}
             style={{
               position: 'absolute', left: 0, top: 8, zIndex: 6,
@@ -868,7 +1538,21 @@ export default function WorkflowPage({ navigate }) {
           </button>
         )}
 
-        {/* ─── CANVAS ─── */}
+        {/* ─── CANVAS, TRACKER, or BOOKS ─── */}
+        {activeView === 'tracker' && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <BusinessTracker />
+          </div>
+        )}
+        {activeView === 'pdfreader' && !selectedPdf && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <PdfLibraryView onOpenReader={(pdf) => setSelectedPdf(pdf)} />
+          </div>
+        )}
+        {activeView === 'pdfreader' && selectedPdf && (
+          <PdfReaderScreen pdf={selectedPdf} onClose={() => setSelectedPdf(null)} />
+        )}
+        {activeView === 'canvas' && (
         <div
           ref={canvasRef}
           className="grid-canvas"
@@ -876,6 +1560,9 @@ export default function WorkflowPage({ navigate }) {
           onMouseMove={handleCanvasMouseMove}
           onMouseUp={endDrag}
           onMouseLeave={endDrag}
+          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragOverCanvas(true) }}
+          onDragLeave={() => setDragOverCanvas(false)}
+          onDrop={handleCanvasDrop}
           onDoubleClick={(e) => {
             if (e.target.classList.contains('grid-canvas') || e.target === canvasRef.current) {
               addTag('rectangle')
@@ -909,6 +1596,9 @@ export default function WorkflowPage({ navigate }) {
               <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
                 <polygon points="0 0, 10 3.5, 0 7" fill="rgba(255,255,255,0.25)" />
               </marker>
+              <marker id="arrowhead-selected" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill={C.cyan} />
+              </marker>
               <marker id="arrowhead-connecting" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
                 <polygon points="0 0, 10 3.5, 0 7" fill={C.cyan} />
               </marker>
@@ -923,14 +1613,14 @@ export default function WorkflowPage({ navigate }) {
               const midX = (path.x1 + path.x2) / 2
               const midY = (path.y1 + path.y2) / 2
               return (
-                <g key={`conn-${i}`}>
+                <g key={`conn-${conn.from}-${conn.to}`}>
                   <path
                     ref={el => { if (el) pathsRef.current[i] = el }}
                     d={path.d}
                     fill="none"
                     stroke={isSelected ? C.cyan : 'rgba(255,255,255,0.18)'}
                     strokeWidth={isSelected ? 2.5 : 2}
-                    markerEnd="url(#arrowhead)"
+                    markerEnd={isSelected ? 'url(#arrowhead-selected)' : 'url(#arrowhead)'}
                     style={{ pointerEvents: 'stroke' }}
                   />
                   <path
@@ -944,20 +1634,24 @@ export default function WorkflowPage({ navigate }) {
                   />
                   {conn.label && (
                     <g>
-                      <rect
-                        x={midX - 14} y={midY - 10}
-                        width={28} height={20} rx={4}
-                        fill="#0d1117"
-                        stroke="rgba(255,255,255,0.1)"
-                        strokeWidth={1}
-                      />
-                      <text
-                        x={midX} y={midY + 4}
-                        textAnchor="middle"
-                        fill={isSelected ? C.cyan : 'rgba(255,255,255,0.5)'}
-                        fontSize={10}
-                        fontWeight={600}
-                      >{conn.label}</text>
+                      {(() => { const labelW = Math.max(28, (conn.label || '').length * 8 + 16); return (
+                        <>
+                          <rect
+                            x={midX - labelW / 2} y={midY - 10}
+                            width={labelW} height={20} rx={4}
+                            fill="#0d1117"
+                            stroke="rgba(255,255,255,0.1)"
+                            strokeWidth={1}
+                          />
+                          <text
+                            x={midX} y={midY + 4}
+                            textAnchor="middle"
+                            fill={isSelected ? C.cyan : 'rgba(255,255,255,0.5)'}
+                            fontSize={10}
+                            fontWeight={600}
+                          >{conn.label}</text>
+                        </>
+                      ) })()}
                     </g>
                   )}
                 </g>
@@ -1062,18 +1756,32 @@ export default function WorkflowPage({ navigate }) {
                       position: 'relative', width: '100%', minHeight: '100%',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       padding: cfg.contentPad || '0 8px',
+                      overflow: 'hidden',
+                      borderRadius: cfg.borderRadius || 0,
                     }}>
-                      <span style={{
-                        display: 'block', fontSize: 11, fontWeight: 600, color: C.text,
-                        padding: 0, lineHeight: 1.35, textAlign: 'center',
-                        wordBreak: 'break-word', overflowWrap: 'break-word',
-                        opacity: editing === tag.id ? 0.4 : 1,
-                      }}>
-                        {tag.text}
-                      </span>
+                      {tag.shape === 'image' && tag.imageSrc ? (
+                        <img src={tag.imageSrc} alt={tag.text}
+                          draggable={false}
+                          style={{
+                            width: '100%', height: '100%',
+                            objectFit: 'cover',
+                            borderRadius: cfg.borderRadius || 0,
+                            display: 'block',
+                          }}
+                        />
+                      ) : (
+                        <span style={{
+                          display: 'block', fontSize: 11, fontWeight: 600, color: C.text,
+                          padding: 0, lineHeight: 1.35, textAlign: 'center',
+                          wordBreak: 'break-word', overflowWrap: 'break-word',
+                          opacity: editing === tag.id ? 0.4 : 1,
+                        }}>
+                          {tag.text}
+                        </span>
+                      )}
 
                       {/* Grip indicator (center, visible on hover) */}
-                      {isHovered && !editing && (
+                      {isHovered && !editing && tag.shape !== 'image' && (
                         <div style={{
                           position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)',
                           color: 'rgba(255,255,255,0.15)', display: 'flex', pointerEvents: 'none',
@@ -1166,7 +1874,7 @@ export default function WorkflowPage({ navigate }) {
                       department: '',
                       app: '',
                     }
-                    setTags(prev => [...prev, newTag])
+                    setTags(prev => [...(Array.isArray(prev) ? prev : []), newTag])
                     setNextId(prev => prev + 1)
                     setSelectedTag(newTag.id)
                     setEditing(newTag.id)
@@ -1200,6 +1908,29 @@ export default function WorkflowPage({ navigate }) {
               <p style={{ fontSize: 15, fontWeight: 600, color: 'rgba(255,255,255,0.25)', margin: 0 }}>
                 Double-click canvas or use the sidebar to start
               </p>
+            </div>
+          )}
+
+          {/* Drag-over indicator */}
+          {dragOverCanvas && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 15,
+              border: `2px dashed ${C.cyan}`,
+              borderRadius: 8,
+              background: `${C.cyan}08`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              pointerEvents: 'none',
+            }}>
+              <div style={{
+                padding: '12px 24px', borderRadius: 10,
+                background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+                border: `1px solid ${C.cyan}40`,
+                display: 'flex', alignItems: 'center', gap: 8,
+                color: C.cyan, fontSize: 13, fontWeight: 600,
+              }}>
+                <Camera size={16} />
+                Drop photo here
+              </div>
             </div>
           )}
 
@@ -1257,7 +1988,7 @@ export default function WorkflowPage({ navigate }) {
           </div>
           </div>
 
-        </div>
+        )}
 
         {/* Delete confirmation modal */}
       <AnimatePresence>
@@ -1314,6 +2045,7 @@ export default function WorkflowPage({ navigate }) {
       </AnimatePresence>
 
       {/* Bottom status bar */}
+      {activeView === 'canvas' && (
       <div style={{
         position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)',
         background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
@@ -1328,6 +2060,9 @@ export default function WorkflowPage({ navigate }) {
           </span>
         )}
       </div>
+      )}
+      </div>
     </div>
+    </>
   )
 }

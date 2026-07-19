@@ -101,6 +101,9 @@ const userSchema = new mongoose.Schema(
     // ── Saved posts ───────────────────────────────────────────────
     savedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Post' }],
 
+    // ── Reposted posts ────────────────────────────────────────────
+    repostedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Post' }],
+
     // ── Privacy / blocking ────────────────────────────────────────
     blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     mutedUsers:   [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
@@ -119,6 +122,11 @@ const userSchema = new mongoose.Schema(
 
     isBanned: { type: Boolean, default: false },
     banReason: { type: String, default: '' },
+
+    // ── E2E Encryption Keys ───────────────────────────────────────
+    publicKey:     { type: String, default: '' },
+    fingerprint:   { type: String, default: '' },
+    keyUploadedAt: { type: Date },
 
     // ── Presence ──────────────────────────────────────────────────
     isOnline: { type: Boolean, default: false },

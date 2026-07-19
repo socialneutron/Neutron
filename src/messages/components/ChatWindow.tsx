@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Conversation, Message, MessageType, Attachment } from '../types';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Conversation, Message, MessageType, Attachment, EncryptedEnvelope } from '../types';
 import {
   ShieldAlert,
   Send,
@@ -16,14 +16,29 @@ import {
   Bell,
   Eraser,
   AlertTriangle,
+  Lock,
+  Fingerprint,
+  ChevronDown,
 } from 'lucide-react';
+import type { E2ECryptoManager } from '../crypto/manager';
+
+function formatLastSeen(dateStr: string): string {
+  const now = new Date();
+  const date = new Date(dateStr);
+  const diff = now.getTime() - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 interface ChatWindowProps {
   conversation: Conversation;
   onSendMessage: (text: string, type?: MessageType, attachment?: Attachment, voiceDuration?: string) => void;
   onToggleBlock: (id: string) => void;
   onToggleReport: (id: string) => void;
-  onChangeDisappearing: (id: string, seconds: number) => void;
   isPlaintextToggle: boolean;
   onReaction: (messageId: string, emoji: string) => void;
   onDeleteMessage: (messageId: string, deleteType: 'me' | 'everyone') => void;
@@ -31,6 +46,9 @@ interface ChatWindowProps {
   onDeleteChat: (convId: string) => void;
   isMuted: boolean;
   onToggleMute: (convId: string) => void;
+  isTyping?: boolean;
+  cryptoManager?: E2ECryptoManager | null;
+  cryptoReady?: boolean;
 }
 
 export default function ChatWindow({
@@ -45,33 +63,52 @@ export default function ChatWindow({
   onDeleteChat,
   isMuted,
   onToggleMute,
+  isTyping = false,
+  cryptoManager,
+  cryptoReady,
 }: ChatWindowProps) {
   const [inputText, setInputText] = useState('');
   const [showMenu, setShowMenu] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showClearHistoryModal, setShowClearHistoryModal] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
 
   const visibleMessages = conversation.messages.filter((msg) => !msg.deletedForMe);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const messagesAreaRef = useRef<HTMLDivElement | null>(null);
   const prevMsgCountRef = useRef(visibleMessages.length);
 
-  // Smart auto-scroll: only scroll to bottom if user is already near the bottom
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    });
+  }, []);
+
+  // Smart auto-scroll
   useEffect(() => {
     const area = messagesAreaRef.current;
-    if (!area) return
-
-    const isNearBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 120
-    const newMsgAdded = visibleMessages.length > prevMsgCountRef.current
-    prevMsgCountRef.current = visibleMessages.length
-
+    if (!area) return;
+    const isNearBottom =
+      area.scrollHeight - area.scrollTop - area.clientHeight < 120;
+    const newMsgAdded = visibleMessages.length > prevMsgCountRef.current;
+    prevMsgCountRef.current = visibleMessages.length;
     if (newMsgAdded && isNearBottom) {
-      requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-      })
+      scrollToBottom();
     }
-  }, [visibleMessages])
+  }, [visibleMessages, scrollToBottom]);
+
+  // Track scroll position to show/hide "new messages" button
+  useEffect(() => {
+    const area = messagesAreaRef.current;
+    if (!area) return;
+    const handleScroll = () => {
+      const isNearBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 120;
+      setShowScrollBtn(!isNearBottom);
+    };
+    area.addEventListener('scroll', handleScroll, { passive: true });
+    return () => area.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleSendText = (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,18 +127,32 @@ export default function ChatWindow({
     }
   };
 
-  // Group messages by date
+  // Group messages by date with enhanced labels
   const groupedMessages: { label: string; messages: Message[] }[] = [];
   let currentDate = '';
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
   visibleMessages.forEach((msg) => {
-    const dateLabel = new Date(msg.timestamp).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-    const simpleLabel =
-      new Date(msg.timestamp).toDateString() === new Date().toDateString() ? 'Today' : dateLabel;
+    const msgDate = new Date(msg.timestamp);
+    const isToday = msgDate.toDateString() === today.toDateString();
+    const isYesterday = msgDate.toDateString() === yesterday.toDateString();
+
+    let simpleLabel: string;
+    if (isToday) {
+      simpleLabel = 'Today';
+    } else if (isYesterday) {
+      simpleLabel = 'Yesterday';
+    } else {
+      const diffDays = Math.floor((today.getTime() - msgDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays < 7) {
+        simpleLabel = msgDate.toLocaleDateString('en-US', { weekday: 'long' });
+      } else {
+        simpleLabel = msgDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+    }
+
     if (simpleLabel !== currentDate) {
       currentDate = simpleLabel;
       groupedMessages.push({ label: simpleLabel, messages: [msg] });
@@ -109,6 +160,9 @@ export default function ChatWindow({
       groupedMessages[groupedMessages.length - 1].messages.push(msg);
     }
   });
+
+  const localFp = conversation.localFingerprint || cryptoManager?.getFingerprint() || '';
+  const peerFp = conversation.peerFingerprint || '';
 
   const styles: { [key: string]: React.CSSProperties } = {
     root: {
@@ -317,8 +371,21 @@ export default function ChatWindow({
       background: '#0d1117',
       flexShrink: 0,
       display: 'flex',
+      flexDirection: 'column',
+      gap: 0,
+    },
+    inputRow: {
+      display: 'flex',
       alignItems: 'center',
       gap: '10px',
+    },
+    typingIndicator: {
+      padding: '4px 0',
+      fontSize: '12px',
+      color: '#6b7280',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
     },
     iconBtn: {
       background: 'none',
@@ -403,7 +470,7 @@ export default function ChatWindow({
     },
     dropdownItem: {
       width: '100%',
-      textAlign: 'left',
+      textAlign: 'left' as const,
       padding: '8px 12px',
       borderRadius: '8px',
       border: 'none',
@@ -431,7 +498,7 @@ export default function ChatWindow({
       border: '1px solid rgba(0,207,255,0.25)',
       borderRadius: '18px',
       padding: '28px',
-      maxWidth: '360px',
+      maxWidth: '400px',
       width: '90%',
       boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
     },
@@ -459,20 +526,69 @@ export default function ChatWindow({
               )}
             </div>
             <div style={styles.headerStatus}>
-              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
-              Active Secure Connection
+              {conversation.participant.online ? (
+                <>
+                  <span
+                    style={{
+                      width: '7px',
+                      height: '7px',
+                      borderRadius: '50%',
+                      background: '#22c55e',
+                      display: 'inline-block',
+                    }}
+                  />
+                  <span style={{ color: '#22c55e' }}>Online</span>
+                </>
+              ) : conversation.participant.lastSeen ? (
+                <>
+                  <span
+                    style={{
+                      width: '7px',
+                      height: '7px',
+                      borderRadius: '50%',
+                      background: '#6b7280',
+                      display: 'inline-block',
+                    }}
+                  />
+                  <span style={{ color: '#6b7280' }}>Last seen {formatLastSeen(conversation.participant.lastSeen)}</span>
+                </>
+              ) : (
+                <>
+                  <span
+                    style={{
+                      width: '7px',
+                      height: '7px',
+                      borderRadius: '50%',
+                      background: conversation.isE2EEEnabled ? '#22c55e' : '#6b7280',
+                      display: 'inline-block',
+                    }}
+                  />
+                  {conversation.isE2EEEnabled
+                    ? 'End-to-End Encrypted'
+                    : 'Establishing encryption...'}
+                </>
+              )}
             </div>
           </div>
         </div>
 
         <div style={styles.headerRight}>
           <button
-            style={styles.secureBadge}
+            style={{
+              ...styles.secureBadge,
+              borderColor: conversation.isE2EEEnabled
+                ? 'rgba(34,197,94,0.4)'
+                : 'rgba(251,191,36,0.4)',
+              color: conversation.isE2EEEnabled ? '#22c55e' : '#fbbf24',
+              background: conversation.isE2EEEnabled
+                ? 'rgba(34,197,94,0.06)'
+                : 'rgba(251,191,36,0.06)',
+            }}
             onClick={() => setShowVerifyModal(true)}
             title="View encryption details"
           >
-            <ShieldCheck style={{ width: '15px', height: '15px' }} />
-            SECURE CHAT
+            <Lock style={{ width: '15px', height: '15px' }} />
+            {conversation.isE2EEEnabled ? 'E2EE ACTIVE' : 'ENCRYPTING'}
           </button>
 
           <div style={{ position: 'relative' }}>
@@ -485,30 +601,72 @@ export default function ChatWindow({
             {showMenu && (
               <div style={styles.dropdownMenu}>
                 <button
-                  onClick={() => { onToggleMute(conversation.id); setShowMenu(false); }}
-                  style={{ ...styles.dropdownItem, color: isMuted ? '#00CFFF' : '#e5e7eb' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                  onClick={() => {
+                    onToggleMute(conversation.id);
+                    setShowMenu(false);
+                  }}
+                  style={{
+                    ...styles.dropdownItem,
+                    color: isMuted ? '#00CFFF' : '#e5e7eb',
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = 'none')
+                  }
                 >
-                  {isMuted ? <Bell style={{ width: '14px', height: '14px' }} /> : <BellOff style={{ width: '14px', height: '14px' }} />}
+                  {isMuted ? (
+                    <Bell style={{ width: '14px', height: '14px' }} />
+                  ) : (
+                    <BellOff style={{ width: '14px', height: '14px' }} />
+                  )}
                   {isMuted ? 'Unmute Notifications' : 'Mute Notifications'}
                 </button>
-                <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '4px 8px' }} />
+                <div
+                  style={{
+                    height: '1px',
+                    background: 'rgba(255,255,255,0.06)',
+                    margin: '4px 8px',
+                  }}
+                />
                 <button
-                  onClick={() => { setShowClearHistoryModal(true); setShowMenu(false); }}
+                  onClick={() => {
+                    setShowClearHistoryModal(true);
+                    setShowMenu(false);
+                  }}
                   style={{ ...styles.dropdownItem, color: '#fbbf24' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(251,191,36,0.08)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background =
+                      'rgba(251,191,36,0.08)')
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = 'none')
+                  }
                 >
                   <Eraser style={{ width: '14px', height: '14px' }} />
                   Clear History
                 </button>
-                <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '4px 8px' }} />
+                <div
+                  style={{
+                    height: '1px',
+                    background: 'rgba(255,255,255,0.06)',
+                    margin: '4px 8px',
+                  }}
+                />
                 <button
-                  onClick={() => { setShowDeleteModal(true); setShowMenu(false); }}
+                  onClick={() => {
+                    setShowDeleteModal(true);
+                    setShowMenu(false);
+                  }}
                   style={{ ...styles.dropdownItem, color: '#f87171' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(239,68,68,0.08)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background =
+                      'rgba(239,68,68,0.08)')
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = 'none')
+                  }
                 >
                   <Trash2 style={{ width: '14px', height: '14px' }} />
                   Delete Chat
@@ -524,16 +682,43 @@ export default function ChatWindow({
         <div style={styles.blockedBanner}>
           <UserX style={{ width: '16px', height: '16px', flexShrink: 0, color: '#ef4444' }} />
           <div>
-            <strong>User Blocked</strong> — You cannot send or receive messages from this contact.
+            <strong>User Blocked</strong> &mdash; You cannot send or receive
+            messages from this contact.
           </div>
         </div>
       )}
 
+      {/* E2EE Status Banner */}
+      {conversation.isE2EEEnabled && (
+        <div
+          style={{
+            margin: '8px 20px',
+            padding: '8px 14px',
+            borderRadius: '10px',
+            background: 'rgba(34,197,94,0.05)',
+            border: '1px solid rgba(34,197,94,0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '11px',
+            color: '#86efac',
+            fontFamily: 'monospace',
+          }}
+        >
+          <Lock style={{ width: '12px', height: '12px', color: '#22c55e' }} />
+          Messages are end-to-end encrypted. No one outside this chat can read
+          them.
+        </div>
+      )}
+
       {/* Messages Area */}
-      <div ref={messagesAreaRef} style={styles.messagesArea} onClick={() => setShowMenu(false)}>
+      <div
+        ref={messagesAreaRef}
+        style={styles.messagesArea}
+        onClick={() => setShowMenu(false)}
+      >
         {groupedMessages.map((group) => (
           <div key={group.label}>
-            {/* Date divider */}
             <div style={styles.dateDivider}>
               <span style={styles.datePill}>{group.label}</span>
             </div>
@@ -541,11 +726,21 @@ export default function ChatWindow({
             <div style={styles.msgGroup}>
               {group.messages.map((msg) => {
                 const isMe = msg.senderId === 'me';
-                const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const time = new Date(msg.timestamp).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
 
                 if (msg.deletedForEveryone) {
                   return (
-                    <div key={msg.id} className="msg-enter" style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
+                    <div
+                      key={msg.id}
+                      className="msg-enter"
+                      style={{
+                        display: 'flex',
+                        justifyContent: isMe ? 'flex-end' : 'flex-start',
+                      }}
+                    >
                       <div
                         style={{
                           display: 'flex',
@@ -560,7 +755,9 @@ export default function ChatWindow({
                           border: '1px solid rgba(255,255,255,0.06)',
                         }}
                       >
-                        <Trash2 style={{ width: '12px', height: '12px', color: '#ef4444' }} />
+                        <Trash2
+                          style={{ width: '12px', height: '12px', color: '#ef4444' }}
+                        />
                         Message purged for everyone
                       </div>
                     </div>
@@ -568,8 +765,11 @@ export default function ChatWindow({
                 }
 
                 return (
-                  <div key={msg.id} className="msg-enter" style={isMe ? styles.bubbleRowMe : styles.bubbleRowBot}>
-                    {/* Bot avatar */}
+                  <div
+                    key={msg.id}
+                    className="msg-enter"
+                    style={isMe ? styles.bubbleRowMe : styles.bubbleRowBot}
+                  >
                     {!isMe && (
                       <img
                         src={conversation.participant.avatar}
@@ -579,8 +779,12 @@ export default function ChatWindow({
                       />
                     )}
 
-                    <div style={{ ...styles.bubbleContent, alignItems: isMe ? 'flex-end' : 'flex-start' }}>
-                      {/* Sender label + time (for bot messages) */}
+                    <div
+                      style={{
+                        ...styles.bubbleContent,
+                        alignItems: isMe ? 'flex-end' : 'flex-start',
+                      }}
+                    >
                       {!isMe && (
                         <div style={styles.senderLabel}>
                           {conversation.participant.username}
@@ -588,13 +792,19 @@ export default function ChatWindow({
                         </div>
                       )}
 
-                      {/* Bubble */}
                       <div style={isMe ? styles.bubbleMe : styles.bubbleBot}>
                         {msg.type === 'text' && (
                           <span style={{ fontSize: '14px', lineHeight: '1.55' }}>
                             {isPlaintextToggle ? (
-                              <span style={{ fontFamily: 'monospace', fontSize: '11px', color: '#fbbf24', letterSpacing: '0.05em', wordBreak: 'break-all' }}>
-                                {msg.encryptedPayload}
+                              <span
+                                style={{
+                                  fontFamily: 'monospace',
+                                  fontSize: '12px',
+                                  color: '#00CFFF',
+                                  wordBreak: 'break-all',
+                                }}
+                              >
+                                {msg.text}
                               </span>
                             ) : (
                               msg.text
@@ -604,26 +814,96 @@ export default function ChatWindow({
 
                         {msg.type === 'image' && (
                           <div>
-                            <img src={msg.attachment?.url} alt={msg.attachment?.name} style={{ maxWidth: '100%', borderRadius: '8px', maxHeight: '200px', objectFit: 'cover' }} />
-                            {msg.text && <p style={{ marginTop: '8px', fontSize: '14px', margin: '6px 0 0' }}>{msg.text}</p>}
+                            <img
+                              src={msg.attachment?.url}
+                              alt={msg.attachment?.name}
+                              style={{
+                                maxWidth: '100%',
+                                borderRadius: '8px',
+                                maxHeight: '200px',
+                                objectFit: 'cover',
+                              }}
+                            />
+                            {msg.text && (
+                              <p
+                                style={{
+                                  marginTop: '8px',
+                                  fontSize: '14px',
+                                  margin: '6px 0 0',
+                                }}
+                              >
+                                {msg.text}
+                              </p>
+                            )}
                           </div>
                         )}
 
                         {msg.type === 'file' && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'rgba(0,207,255,0.1)', border: '1px solid rgba(0,207,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <Layers style={{ width: '18px', height: '18px', color: '#00CFFF' }} />
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '10px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '8px',
+                                background: 'rgba(0,207,255,0.1)',
+                                border: '1px solid rgba(0,207,255,0.2)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <Layers
+                                style={{
+                                  width: '18px',
+                                  height: '18px',
+                                  color: '#00CFFF',
+                                }}
+                              />
                             </div>
                             <div>
-                              <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: isMe ? '#fff' : '#e5e7eb' }}>{msg.attachment?.name}</p>
-                              <p style={{ margin: 0, fontSize: '11px', color: isMe ? 'rgba(255,255,255,0.6)' : '#6b7280', fontFamily: 'monospace' }}>{msg.attachment?.size}</p>
+                              <p
+                                style={{
+                                  margin: 0,
+                                  fontSize: '13px',
+                                  fontWeight: 600,
+                                  color: isMe ? '#fff' : '#e5e7eb',
+                                }}
+                              >
+                                {msg.attachment?.name}
+                              </p>
+                              <p
+                                style={{
+                                  margin: 0,
+                                  fontSize: '11px',
+                                  color: isMe
+                                    ? 'rgba(255,255,255,0.6)'
+                                    : '#6b7280',
+                                  fontFamily: 'monospace',
+                                }}
+                              >
+                                {msg.attachment?.size}
+                              </p>
                             </div>
                           </div>
                         )}
 
-                        {/* Reactions */}
                         {msg.reactions.length > 0 && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              gap: '4px',
+                              marginTop: '6px',
+                              paddingTop: '6px',
+                              borderTop: '1px solid rgba(255,255,255,0.08)',
+                            }}
+                          >
                             {msg.reactions.map((r, i) => (
                               <span
                                 key={i}
@@ -642,16 +922,43 @@ export default function ChatWindow({
                         )}
                       </div>
 
-                      {/* Timestamp + read receipt (for my messages) */}
                       {isMe && (
                         <div style={styles.bubbleMeta}>
+                          {/* Encryption indicator on sent messages */}
+                          {msg.isEncrypted && (
+                            <Lock
+                              style={{
+                                width: '10px',
+                                height: '10px',
+                                color: '#22c55e',
+                              }}
+                            />
+                          )}
                           <span style={styles.metaTime}>{time}</span>
                           {msg.status === 'read' ? (
-                            <CheckCheck style={{ width: '14px', height: '14px', color: '#00CFFF' }} />
+                            <CheckCheck
+                              style={{
+                                width: '14px',
+                                height: '14px',
+                                color: '#00CFFF',
+                              }}
+                            />
                           ) : msg.status === 'delivered' ? (
-                            <CheckCheck style={{ width: '14px', height: '14px', color: '#6b7280' }} />
+                            <CheckCheck
+                              style={{
+                                width: '14px',
+                                height: '14px',
+                                color: '#6b7280',
+                              }}
+                            />
                           ) : (
-                            <Check style={{ width: '14px', height: '14px', color: '#6b7280' }} />
+                            <Check
+                              style={{
+                                width: '14px',
+                                height: '14px',
+                                color: '#6b7280',
+                              }}
+                            />
                           )}
                         </div>
                       )}
@@ -665,94 +972,386 @@ export default function ChatWindow({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-      <form onSubmit={handleSendText} style={styles.inputArea}>
-        {/* + Button */}
+      {/* Scroll to bottom button */}
+      {showScrollBtn && (
         <button
-          type="button"
+          onClick={() => scrollToBottom()}
           style={{
-            ...styles.iconBtn,
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '12px',
-            width: '40px',
-            height: '40px',
-            color: '#9ca3af',
+            position: 'absolute',
+            bottom: '140px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 20,
+            background: '#1a2332',
+            border: '1px solid rgba(255,255,255,0.12)',
+            borderRadius: '99px',
+            padding: '8px 16px',
+            color: '#e5e7eb',
+            fontSize: '12px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+            transition: 'opacity 0.2s',
           }}
-          title="Attach file"
-          disabled={conversation.isBlocked}
         >
-          <Plus style={{ width: '18px', height: '18px' }} />
+          <ChevronDown style={{ width: '14px', height: '14px' }} />
+          New messages
         </button>
+      )}
 
-        {/* Input wrapper */}
-        <div
-          style={{
-            ...styles.inputWrap,
-          }}
-        >
-          {/* Shield icon inside input */}
+      {/* Input Area */}
+      <div style={styles.inputArea}>
+        {isTyping && (
+          <div style={styles.typingIndicator}>
+            <span style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: '#00CFFF',
+                  display: 'inline-block',
+                  animation: 'typing 1.4s infinite',
+                }}
+              />
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: '#00CFFF',
+                  display: 'inline-block',
+                  animation: 'typing 1.4s 0.2s infinite',
+                }}
+              />
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: '#00CFFF',
+                  display: 'inline-block',
+                  animation: 'typing 1.4s 0.4s infinite',
+                }}
+              />
+            </span>
+            <span style={{ color: '#9ca3af' }}>
+              <strong style={{ color: '#e5e7eb' }}>{conversation.participant.username}</strong> is typing...
+            </span>
+          </div>
+        )}
+        <form onSubmit={handleSendText} style={styles.inputRow}>
           <button
             type="button"
-            style={styles.shieldBtn}
-            title="Encryption active"
-            onClick={() => setShowVerifyModal(true)}
+            style={{
+              ...styles.iconBtn,
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '12px',
+              width: '40px',
+              height: '40px',
+              color: '#9ca3af',
+            }}
+            title="Attach file"
+            disabled={conversation.isBlocked}
+            onClick={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = 'image/*,.pdf,.doc,.docx,.txt';
+              input.onchange = (e: Event) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file) return;
+                const attachment: Attachment = {
+                  name: file.name,
+                  type: file.type,
+                  size: `${(file.size / 1024).toFixed(1)} KB`,
+                  url: URL.createObjectURL(file),
+                };
+                const msgType: MessageType = file.type.startsWith('image/')
+                  ? 'image'
+                  : 'file';
+                onSendMessage(file.name, msgType, attachment);
+              };
+              input.click();
+            }}
           >
-            <ShieldCheck style={{ width: '17px', height: '17px' }} />
+            <Plus style={{ width: '18px', height: '18px' }} />
           </button>
 
-          <input
-            type="text"
-            placeholder="Type a secure message..."
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            style={styles.input}
-            disabled={conversation.isBlocked}
-          />
-        </div>
+          <div style={styles.inputWrap}>
+            <button
+              type="button"
+              style={styles.shieldBtn}
+              title="View encryption details"
+              onClick={() => setShowVerifyModal(true)}
+            >
+              <Lock style={{ width: '17px', height: '17px' }} />
+            </button>
 
-        {/* Send button */}
-        <button
-          type="submit"
-          disabled={!inputText.trim() || conversation.isBlocked}
-          style={{
-            ...styles.sendBtn,
-            opacity: !inputText.trim() || conversation.isBlocked ? 0.45 : 1,
-          }}
-          title="Send"
-        >
-          <Send style={{ width: '17px', height: '17px', color: '#000' }} />
-        </button>
-      </form>
+            <input
+              type="text"
+              placeholder="Type an encrypted message..."
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              style={styles.input}
+              disabled={conversation.isBlocked}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={!inputText.trim() || conversation.isBlocked}
+            style={{
+              ...styles.sendBtn,
+              opacity: !inputText.trim() || conversation.isBlocked ? 0.45 : 1,
+            }}
+            title="Send"
+          >
+            <Send style={{ width: '17px', height: '17px', color: '#000' }} />
+          </button>
+        </form>
+      </div>
 
       {/* Verify Encryption Modal */}
       {showVerifyModal && (
-        <div style={styles.verifyModal} onClick={() => setShowVerifyModal(false)}>
+        <div
+          style={styles.verifyModal}
+          onClick={() => setShowVerifyModal(false)}
+        >
           <div style={styles.verifyBox} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '18px' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(0,207,255,0.1)', border: '1px solid rgba(0,207,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <ShieldCheck style={{ width: '20px', height: '20px', color: '#00CFFF' }} />
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                marginBottom: '18px',
+              }}
+            >
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '10px',
+                  background: conversation.isE2EEEnabled
+                    ? 'rgba(34,197,94,0.1)'
+                    : 'rgba(0,207,255,0.1)',
+                  border: conversation.isE2EEEnabled
+                    ? '1px solid rgba(34,197,94,0.25)'
+                    : '1px solid rgba(0,207,255,0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {conversation.isE2EEEnabled ? (
+                  <ShieldCheck style={{ width: '20px', height: '20px', color: '#22c55e' }} />
+                ) : (
+                  <Lock style={{ width: '20px', height: '20px', color: '#00CFFF' }} />
+                )}
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#fff' }}>End-to-End Encrypted</h3>
-                <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>X3DH Key Exchange Protocol</p>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: '16px',
+                    fontWeight: 700,
+                    color: '#fff',
+                  }}
+                >
+                  {conversation.isE2EEEnabled
+                    ? 'End-to-End Encrypted'
+                    : 'Establishing Encryption'}
+                </h3>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '12px',
+                    color: '#6b7280',
+                  }}
+                >
+                  ECDH P-256 + Double Ratchet + AES-256-GCM
+                </p>
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px' }}>
-              <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '12px 14px' }}>
-                <p style={{ margin: '0 0 4px', fontSize: '11px', color: '#6b7280', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Contact Fingerprint</p>
-                <p style={{ margin: 0, fontSize: '13px', color: '#00CFFF', fontFamily: 'monospace', letterSpacing: '0.08em' }}>{conversation.participant.encryptionKeyFingerprint}</p>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                marginBottom: '18px',
+              }}
+            >
+              {/* Your fingerprint */}
+              <div
+                style={{
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                }}
+              >
+                <p
+                  style={{
+                    margin: '0 0 4px',
+                    fontSize: '11px',
+                    color: '#6b7280',
+                    fontFamily: 'monospace',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                  }}
+                >
+                  Your Fingerprint
+                </p>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '13px',
+                    color: '#00CFFF',
+                    fontFamily: 'monospace',
+                    letterSpacing: '0.08em',
+                  }}
+                >
+                  {localFp || 'Generating...'}
+                </p>
               </div>
-              <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '12px 14px' }}>
-                <p style={{ margin: '0 0 4px', fontSize: '11px', color: '#6b7280', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Encryption Standard</p>
-                <p style={{ margin: 0, fontSize: '13px', color: '#e5e7eb', fontFamily: 'monospace' }}>AES-256-GCM + X3DH Signal Protocol</p>
+
+              {/* Contact fingerprint */}
+              <div
+                style={{
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                }}
+              >
+                <p
+                  style={{
+                    margin: '0 0 4px',
+                    fontSize: '11px',
+                    color: '#6b7280',
+                    fontFamily: 'monospace',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                  }}
+                >
+                  Contact Fingerprint
+                </p>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '13px',
+                    color: '#00CFFF',
+                    fontFamily: 'monospace',
+                    letterSpacing: '0.08em',
+                  }}
+                >
+                  {peerFp || conversation.participant.encryptionKeyFingerprint || 'Unknown'}
+                </p>
               </div>
-              <div style={{ background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '10px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <CheckCheck style={{ width: '16px', height: '16px', color: '#22c55e', flexShrink: 0 }} />
-                <p style={{ margin: 0, fontSize: '13px', color: '#86efac' }}>Connection verified — No interception detected</p>
+
+              {/* Encryption standard */}
+              <div
+                style={{
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                }}
+              >
+                <p
+                  style={{
+                    margin: '0 0 4px',
+                    fontSize: '11px',
+                    color: '#6b7280',
+                    fontFamily: 'monospace',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                  }}
+                >
+                  Encryption Standard
+                </p>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '13px',
+                    color: '#e5e7eb',
+                    fontFamily: 'monospace',
+                  }}
+                >
+                  AES-256-GCM + ECDH + Double Ratchet
+                </p>
               </div>
+
+              {/* Verification status */}
+              {conversation.isE2EEEnabled && (
+                <div
+                  style={{
+                    background: 'rgba(34,197,94,0.06)',
+                    border: '1px solid rgba(34,197,94,0.2)',
+                    borderRadius: '10px',
+                    padding: '12px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <CheckCheck
+                    style={{
+                      width: '16px',
+                      height: '16px',
+                      color: '#22c55e',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '13px',
+                      color: '#86efac',
+                    }}
+                  >
+                    Connection verified &mdash; No interception detected
+                  </p>
+                </div>
+              )}
+
+              {!conversation.isE2EEEnabled && (
+                <div
+                  style={{
+                    background: 'rgba(251,191,36,0.06)',
+                    border: '1px solid rgba(251,191,36,0.2)',
+                    borderRadius: '10px',
+                    padding: '12px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <AlertTriangle
+                    style={{
+                      width: '16px',
+                      height: '16px',
+                      color: '#fbbf24',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '13px',
+                      color: '#fde68a',
+                    }}
+                  >
+                    Key exchange in progress &mdash; messages will be encrypted
+                    shortly
+                  </p>
+                </div>
+              )}
             </div>
 
             <button
@@ -778,20 +1377,66 @@ export default function ChatWindow({
 
       {/* Delete Chat Confirmation Modal */}
       {showDeleteModal && (
-        <div style={styles.verifyModal} onClick={() => setShowDeleteModal(false)}>
+        <div
+          style={styles.verifyModal}
+          onClick={() => setShowDeleteModal(false)}
+        >
           <div style={styles.verifyBox} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <AlertTriangle style={{ width: '20px', height: '20px', color: '#ef4444' }} />
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                marginBottom: '16px',
+              }}
+            >
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '10px',
+                  background: 'rgba(239,68,68,0.1)',
+                  border: '1px solid rgba(239,68,68,0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <AlertTriangle
+                  style={{ width: '20px', height: '20px', color: '#ef4444' }}
+                />
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#fff' }}>Delete Conversation</h3>
-                <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>This action cannot be undone</p>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: '16px',
+                    fontWeight: 700,
+                    color: '#fff',
+                  }}
+                >
+                  Delete Conversation
+                </h3>
+                <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>
+                  This action cannot be undone
+                </p>
               </div>
             </div>
 
-            <p style={{ margin: '0 0 18px', fontSize: '14px', color: '#9ca3af', lineHeight: 1.6 }}>
-              Are you sure you want to delete this conversation with <strong style={{ color: '#e5e7eb' }}>@{conversation.participant.username}</strong>? All messages will be permanently removed. This action cannot be undone.
+            <p
+              style={{
+                margin: '0 0 18px',
+                fontSize: '14px',
+                color: '#9ca3af',
+                lineHeight: 1.6,
+              }}
+            >
+              Are you sure you want to delete this conversation with{' '}
+              <strong style={{ color: '#e5e7eb' }}>
+                @{conversation.participant.username}
+              </strong>
+              ? All encrypted messages and encryption keys for this conversation
+              will be permanently destroyed.
             </p>
 
             <div style={{ display: 'flex', gap: '10px' }}>
@@ -809,13 +1454,20 @@ export default function ChatWindow({
                   cursor: 'pointer',
                   transition: 'background 0.2s',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')
+                }
               >
                 Cancel
               </button>
               <button
-                onClick={() => { onDeleteChat(conversation.id); setShowDeleteModal(false); }}
+                onClick={() => {
+                  onDeleteChat(conversation.id);
+                  setShowDeleteModal(false);
+                }}
                 style={{
                   flex: 1,
                   padding: '11px',
@@ -828,8 +1480,12 @@ export default function ChatWindow({
                   cursor: 'pointer',
                   transition: 'background 0.2s',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = '#dc2626')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = '#ef4444')}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = '#dc2626')
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = '#ef4444')
+                }
               >
                 Delete Chat
               </button>
@@ -840,20 +1496,67 @@ export default function ChatWindow({
 
       {/* Clear History Confirmation Modal */}
       {showClearHistoryModal && (
-        <div style={styles.verifyModal} onClick={() => setShowClearHistoryModal(false)}>
+        <div
+          style={styles.verifyModal}
+          onClick={() => setShowClearHistoryModal(false)}
+        >
           <div style={styles.verifyBox} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Eraser style={{ width: '20px', height: '20px', color: '#fbbf24' }} />
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                marginBottom: '16px',
+              }}
+            >
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '10px',
+                  background: 'rgba(251,191,36,0.1)',
+                  border: '1px solid rgba(251,191,36,0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Eraser
+                  style={{ width: '20px', height: '20px', color: '#fbbf24' }}
+                />
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#fff' }}>Clear Chat History</h3>
-                <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>Remove all messages</p>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: '16px',
+                    fontWeight: 700,
+                    color: '#fff',
+                  }}
+                >
+                  Clear Chat History
+                </h3>
+                <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>
+                  Remove all messages
+                </p>
               </div>
             </div>
 
-            <p style={{ margin: '0 0 18px', fontSize: '14px', color: '#9ca3af', lineHeight: 1.6 }}>
-              Are you sure you want to clear all messages in this conversation with <strong style={{ color: '#e5e7eb' }}>@{conversation.participant.username}</strong>? You will remain in the conversation but all message history will be erased.
+            <p
+              style={{
+                margin: '0 0 18px',
+                fontSize: '14px',
+                color: '#9ca3af',
+                lineHeight: 1.6,
+              }}
+            >
+              Are you sure you want to clear all messages in this conversation
+              with{' '}
+              <strong style={{ color: '#e5e7eb' }}>
+                @{conversation.participant.username}
+              </strong>
+              ? You will remain in the conversation but all message history will
+              be erased.
             </p>
 
             <div style={{ display: 'flex', gap: '10px' }}>
@@ -871,13 +1574,20 @@ export default function ChatWindow({
                   cursor: 'pointer',
                   transition: 'background 0.2s',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')
+                }
               >
                 Cancel
               </button>
               <button
-                onClick={() => { onClearHistory(conversation.id); setShowClearHistoryModal(false); }}
+                onClick={() => {
+                  onClearHistory(conversation.id);
+                  setShowClearHistoryModal(false);
+                }}
                 style={{
                   flex: 1,
                   padding: '11px',
@@ -890,8 +1600,12 @@ export default function ChatWindow({
                   cursor: 'pointer',
                   transition: 'background 0.2s',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = '#d97706')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = '#f59e0b')}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = '#d97706')
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = '#f59e0b')
+                }
               >
                 Clear History
               </button>

@@ -12,6 +12,23 @@
   justify-content: center;
   gap: 0;
   z-index: 1000;
+  transition: background 0.3s ease, border-color 0.3s ease, backdrop-filter 0.3s ease;
+}
+
+.bottom-nav.nav-hidden {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-top-color: transparent;
+}
+
+.bottom-nav.nav-hidden .nav-label {
+  opacity: 0;
+}
+
+.bottom-nav.nav-hidden .nav-create-btn {
+  opacity: 0.3;
+  box-shadow: none;
 }
 
 .nav-group {
@@ -95,4 +112,23 @@
 }
 .nav-create-btn:active {
   transform: scale(0.95);
+}
+
+.nav-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-shadow: 0 1px 4px rgba(239, 68, 68, 0.5);
 }

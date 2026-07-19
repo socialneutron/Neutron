@@ -24,6 +24,9 @@ const commentsRoutes       = require('./routes/comments');
 const messagesRoutes       = require('./routes/messages');
 const notificationsRoutes  = require('./routes/notifications');
 const searchRoutes         = require('./routes/search');
+const feedRoutes           = require('./routes/feed');
+const exploreRoutes        = require('./routes/explore');
+const eventsRoutes         = require('./routes/events');
 
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
@@ -60,6 +63,9 @@ app.use('/api/comments',       commentsRoutes);
 app.use('/api/messages',       messagesRoutes);
 app.use('/api/notifications',  notificationsRoutes);
 app.use('/api/search',         searchRoutes);
+app.use('/api/feed',           feedRoutes);
+app.use('/api/explore',        exploreRoutes);
+app.use('/api/events',         eventsRoutes);
 
 // ── Error handling (must be after routes) ──────────────────────────
 app.use(notFoundHandler);

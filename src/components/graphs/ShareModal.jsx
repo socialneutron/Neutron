@@ -93,7 +93,7 @@ export default function ShareModal({ isOpen, onClose, graphId, graphTitle, navig
   };
 
   const handleShareToFeed = () => {
-    navigate?.('/create-post', { state: { graphId, graphTitle } });
+    navigate?.('create-post', { state: { graphId, graphTitle } });
     onClose();
   };
 

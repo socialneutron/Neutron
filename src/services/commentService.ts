@@ -32,16 +32,30 @@ export const commentService = {
       .select()
       .single()
     if (error) return null
-    await supabase.rpc('increment_count', { table_name: 'posts', column_name: 'comments_count', row_id: postId })
+    await Promise.all([
+      supabase.rpc('increment_count', { table_name: 'posts', column_name: 'comments_count', row_id: postId }),
+      parentId ? supabase.rpc('increment_count', { table_name: 'comments', column_name: 'replies_count', row_id: parentId }) : Promise.resolve(),
+    ])
     return data
   },
 
   async delete(commentId: string, postId: string): Promise<boolean> {
+    const { data: comment } = await supabase
+      .from('comments')
+      .select('parent_id')
+      .eq('id', commentId)
+      .single()
+
     const { error } = await supabase
       .from('comments')
       .delete()
       .eq('id', commentId)
-    if (!error) await supabase.rpc('decrement_count', { table_name: 'posts', column_name: 'comments_count', row_id: postId })
+    if (!error) {
+      await Promise.all([
+        supabase.rpc('decrement_count', { table_name: 'posts', column_name: 'comments_count', row_id: postId }),
+        comment?.parent_id ? supabase.rpc('decrement_count', { table_name: 'comments', column_name: 'replies_count', row_id: comment.parent_id }) : Promise.resolve(),
+      ])
+    }
     return !error
   },
 

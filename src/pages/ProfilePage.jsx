@@ -1,35 +1,71 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Settings, MessageSquare, LinkIcon, Calendar, FileText, Send, X, Grid, Tag, Lock, Check, Bookmark, Heart, MessageCircle, User } from 'lucide-react'
+import { ArrowLeft, Settings, MessageSquare, LinkIcon, Calendar, FileText, X, Grid, Tag, Lock, Check, Bookmark, Heart, MessageCircle, User, Building2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSupabaseAuth } from '../context/SupabaseAuthContext'
-import { userService, followService } from '../services'
+import { userService, followService, bookmarkService } from '../services'
 import { useProfileStore } from '../stores/profileStore'
 import { useChatStore } from '../stores/chatStore'
 import { useUserAvatar } from '../stores/userAvatarStore'
 import { useHighlightStore } from '../stores/highlightStore'
+import { timeAgo } from '@/lib/timeAgo'
+import ProfileBanner from '../components/ProfileBanner'
+import ScopedErrorBoundary from '../components/ScopedErrorBoundary'
 import PostCard from '../components/social/PostCard'
 
 const C = {
-  bg: '#05050A', card: '#090914', cardBdr: 'rgba(255,255,255,0.06)',
+  bg: '#020617', card: '#090914', cardBdr: 'rgba(255,255,255,0.06)',
   accent: '#00D2FF', green: '#34D399', cyan: '#00D2FF', purple: '#7928CA',
   text: '#f1f5f9', muted: '#6b7280', border: 'rgba(255,255,255,0.06)',
   amber: '#f59e0b', red: '#ef4444',
 }
 
+const POSTS_PER_PAGE = 20
+
+function normalizeAuthor(raw) {
+  if (!raw) return null
+  if (raw.username && raw.display_name) {
+    return { id: raw.id, name: raw.display_name, handle: `@${raw.username}`, avatar: raw.avatar_url, verified: raw.is_verified }
+  }
+  if (raw.handle || raw.name) {
+    return {
+      id: raw.id || null,
+      name: raw.name || raw.display_name || 'User',
+      handle: raw.handle || (raw.username ? `@${raw.username}` : '@user'),
+      avatar: raw.avatar || raw.avatar_url || '',
+      verified: raw.verified ?? raw.is_verified ?? false,
+    }
+  }
+  return { id: raw.id || null, name: 'User', handle: '@user', avatar: '', verified: false }
+}
+
+function SectionFallback({ label }) {
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '28px 20px', textAlign: 'center' }}>
+      <p style={{ fontSize: 14, fontWeight: 600, color: C.text, margin: '0 0 4px' }}>Couldn't load {label}</p>
+      <p style={{ fontSize: 12, color: C.muted, margin: 0 }}>Something went wrong loading this section.</p>
+    </div>
+  )
+}
+
+const Spinner = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', padding: 30 }}>
+    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+      style={{ width: 24, height: 24, border: '2px solid rgba(255,255,255,0.1)', borderTopColor: C.cyan, borderRadius: '50%' }} />
+  </div>
+)
+
 export default function ProfilePage({ user: propUser, navigate, profileAuthor }) {
   const { user: firebaseUser } = useAuth()
   const { user: supaUser, profile: supaProfile } = useSupabaseAuth()
   const { profile, setProfile, isFollowing, setIsFollowing, toggleFollow } = useProfileStore()
-  const { getOrCreateConversation, addMessage } = useChatStore()
-  const { avatar: globalAvatar, displayName: globalDisplayName, bio: globalBio } = useUserAvatar()
+  const { getOrCreateConversation } = useChatStore()
+  const { avatar: globalAvatar, banner: globalBanner, displayName: globalDisplayName, bio: globalBio } = useUserAvatar()
   const { highlightsByUser, loadHighlights } = useHighlightStore()
 
   const [userPosts, setUserPosts] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showChat, setShowChat] = useState(false)
-  const [chatMsg, setChatMsg] = useState('')
-  const [chatMessages, setChatMessages] = useState([])
+  const [error, setError] = useState(null)
   const [followersCount, setFollowersCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
   const [activeTab, setActiveTab] = useState('posts')
@@ -37,78 +73,176 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
   const [showFollowing, setShowFollowing] = useState(false)
   const [followersList, setFollowersList] = useState([])
   const [followingList, setFollowingList] = useState([])
-  const chatEndRef = useRef(null)
+  const [followersLoading, setFollowersLoading] = useState(false)
+  const [followingLoading, setFollowingLoading] = useState(false)
+  const [savedPosts, setSavedPosts] = useState([])
+  const [savedLoading, setSavedLoading] = useState(false)
+  const [postsPage, setPostsPage] = useState(0)
+  const [hasMorePosts, setHasMorePosts] = useState(true)
+  const [loadingMorePosts, setLoadingMorePosts] = useState(false)
+  const [postFilter, setPostFilter] = useState('all')
+  const [profileListings, setProfileListings] = useState({ companies: [], products: [], ebooks: [] })
+  const [listingsCategoryTab, setListingsCategoryTab] = useState('all')
 
   const activeUser = firebaseUser || propUser
-  const isViewingOther = !!profileAuthor
-
   const currentUser = supaUser || activeUser
+  const userId = currentUser?.id || currentUser?.uid || ''
+
+  const normalizedAuthor = useMemo(() => normalizeAuthor(profileAuthor), [profileAuthor?.id, profileAuthor?.handle, profileAuthor?.name, profileAuthor?.username])
+
   const currentUsername = currentUser?.user_metadata?.username
     || currentUser?.username
     || currentUser?.displayName
     || ''
 
-  const isOwnProfile = !isViewingOther
-  const isSelf = isViewingOther
-    && currentUsername
-    && (currentUsername === profile?.username || currentUsername === profileAuthor?.handle?.replace('@', ''))
+  const isOwnProfile = !normalizedAuthor || !normalizedAuthor.id || (currentUsername
+    && (currentUsername === profile?.username || currentUsername === normalizedAuthor.handle?.replace('@', '')))
 
-  const resolvedUsername = isViewingOther
-    ? (profileAuthor.handle?.replace('@', '') || profileAuthor.name?.toLowerCase()?.replace(/\s/g, ''))
-    : currentUsername || 'pratham'
+  const filteredPosts = useMemo(() => {
+    if (postFilter === 'text') return userPosts.filter(p => !p.image_url && (!p.images || p.images.length === 0))
+    if (postFilter === 'photos') return userPosts.filter(p => p.image_url || (p.images && p.images.length > 0))
+    return userPosts
+  }, [userPosts, postFilter])
 
+  const postCounts = useMemo(() => ({
+    all: userPosts.length,
+    text: userPosts.filter(p => !p.image_url && (!p.images || p.images.length === 0)).length,
+    photos: userPosts.filter(p => p.image_url || (p.images && p.images.length > 0)).length,
+  }), [userPosts])
+
+  const resolvedUsername = normalizedAuthor
+    ? (normalizedAuthor.handle?.replace('@', '') || normalizedAuthor.name?.toLowerCase()?.replace(/\s/g, ''))
+    : currentUsername || 'user'
+
+  // Load profile data
   useEffect(() => {
     let cancelled = false
     const load = async () => {
       setLoading(true)
-      if (isViewingOther) {
+      setError(null)
+      if (normalizedAuthor) {
         try {
-          const profileData = profileAuthor.id
-            ? await userService.getProfileById(profileAuthor.id)
+          let profileData = normalizedAuthor.id
+            ? await userService.getProfileById(normalizedAuthor.id)
             : await userService.getProfile(resolvedUsername)
-          if (!cancelled && profileData) {
-            setProfile(profileData)
-            const followerId = currentUser?.id || currentUser?.uid
-            if (followerId) {
-              const following = await followService.isFollowing(followerId, profileData.id)
-              if (!cancelled) setIsFollowing(following)
-            }
-            const posts = await userService.getUserPosts(profileData.id, followerId)
-            if (!cancelled) setUserPosts(posts || [])
-
-            const followers = await followService.getFollowers(profileData.id)
-            const followingList = await followService.getFollowing(profileData.id)
-            if (!cancelled) {
-              setFollowersCount(followers.length || profileData.followers_count || 0)
-              setFollowingCount(followingList.length || profileData.following_count || 0)
-            }
-            if (!cancelled) loadHighlights(profileData.id)
-          }
-        } catch {
-          if (!cancelled) setUserPosts([])
-        }
-      } else if (supaProfile) {
-        setProfile(supaProfile)
-        try {
-          const posts = await userService.getUserPosts(supaProfile.id, currentUser?.id || currentUser?.uid)
-          if (!cancelled) setUserPosts(posts || [])
-
-          const followers = await followService.getFollowers(supaProfile.id)
-          const followingList = await followService.getFollowing(supaProfile.id)
           if (!cancelled) {
-            setFollowersCount(followers.length || supaProfile.followers_count || 0)
-            setFollowingCount(followingList.length || supaProfile.following_count || 0)
+            if (!profileData && normalizedAuthor.id) {
+              profileData = {
+                id: normalizedAuthor.id,
+                username: normalizedAuthor.handle?.replace('@', '') || 'user',
+                display_name: normalizedAuthor.name || 'User',
+                avatar_url: normalizedAuthor.avatar || '',
+                banner_url: '',
+                bio: '', website: '', location: '',
+                is_verified: normalizedAuthor.verified || false,
+                followers_count: 0, following_count: 0, posts_count: 0,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }
+            }
+            if (!profileData) { setProfile(null); setLoading(false); return }
+            setProfile(profileData)
+            if (!cancelled) setLoading(false)
+            const followerId = currentUser?.id || currentUser?.uid
+            const [following, posts, followers, followingData] = await Promise.all([
+              followerId ? followService.isFollowing(followerId, profileData.id).catch(() => false) : Promise.resolve(false),
+              userService.getUserPosts(profileData.id, followerId, 0, POSTS_PER_PAGE).catch(() => []),
+              followService.getFollowers(profileData.id).catch(() => []),
+              followService.getFollowing(profileData.id).catch(() => []),
+            ])
+            if (!cancelled) {
+              setIsFollowing(following)
+              setUserPosts(posts || [])
+              setHasMorePosts((posts || []).length >= POSTS_PER_PAGE)
+              setPostsPage(0)
+              setFollowersList(followers || [])
+              setFollowingList(followingData || [])
+              setFollowersCount(profileData.followers_count || (followers || []).length || 0)
+              setFollowingCount(profileData.following_count || (followingData || []).length || 0)
+              loadHighlights(profileData.id)
+            }
           }
-          if (!cancelled) loadHighlights(supaProfile.id)
         } catch {
-          if (!cancelled) setUserPosts([])
+          if (!cancelled) { setError('Failed to load profile'); setUserPosts([]) }
+        }
+      } else {
+        setIsFollowing(false)
+        setUserPosts([])
+        setFollowersCount(0)
+        setFollowingCount(0)
+        setFollowersList([])
+        setFollowingList([])
+        const ownProfile = supaProfile || {
+          id: currentUser?.id || currentUser?.uid || 'demo-user-id',
+          username: currentUser?.user_metadata?.username || currentUser?.username || currentUser?.displayName || globalDisplayName?.toLowerCase().replace(/\s/g, '_') || 'user',
+          display_name: globalDisplayName || currentUser?.user_metadata?.display_name || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'User',
+          avatar_url: globalAvatar || currentUser?.user_metadata?.avatar_url || currentUser?.photoURL || '',
+          banner_url: '',
+          bio: globalBio || '',
+          website: '', location: '',
+          is_verified: false,
+          followers_count: 0, following_count: 0, posts_count: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+        setProfile(ownProfile)
+        if (!cancelled) setLoading(false)
+        const ownUserId = currentUser?.id || currentUser?.uid
+        const [posts, followers, followingData] = await Promise.all([
+          userService.getUserPosts(ownProfile.id, ownUserId, 0, POSTS_PER_PAGE).catch(() => []),
+          followService.getFollowers(ownProfile.id).catch(() => []),
+          followService.getFollowing(ownProfile.id).catch(() => []),
+        ])
+        if (!cancelled) {
+          setUserPosts(posts || [])
+          setHasMorePosts((posts || []).length >= POSTS_PER_PAGE)
+          setPostsPage(0)
+          setFollowersList(followers || [])
+          setFollowingList(followingData || [])
+          setFollowersCount(ownProfile.followers_count || (followers || []).length || 0)
+          setFollowingCount(ownProfile.following_count || (followingData || []).length || 0)
+          loadHighlights(ownProfile.id)
         }
       }
-      if (!cancelled) setLoading(false)
     }
     load()
     return () => { cancelled = true }
-  }, [resolvedUsername, isViewingOther, currentUser, supaProfile, setProfile, setIsFollowing, profileAuthor?.id, loadHighlights])
+  }, [resolvedUsername, normalizedAuthor?.id, userId])
+
+  // Lazy-load followers list when modal opens
+  useEffect(() => {
+    if (!showFollowers || followersList.length > 0 || !profile?.id) return
+    let cancelled = false
+    setFollowersLoading(true)
+    followService.getFollowers(profile.id).then(data => {
+      if (!cancelled) { setFollowersList(data || []); setFollowersLoading(false) }
+    }).catch(() => { if (!cancelled) setFollowersLoading(false) })
+    return () => { cancelled = true }
+  }, [showFollowers, profile?.id])
+
+  // Lazy-load following list when modal opens
+  useEffect(() => {
+    if (!showFollowing || followingList.length > 0 || !profile?.id) return
+    let cancelled = false
+    setFollowingLoading(true)
+    followService.getFollowing(profile.id).then(data => {
+      if (!cancelled) { setFollowingList(data || []); setFollowingLoading(false) }
+    }).catch(() => { if (!cancelled) setFollowingLoading(false) })
+    return () => { cancelled = true }
+  }, [showFollowing, profile?.id])
+
+  const loadMorePosts = useCallback(async () => {
+    if (!profile || loadingMorePosts) return
+    setLoadingMorePosts(true)
+    try {
+      const nextPage = postsPage + 1
+      const followerId = currentUser?.id || currentUser?.uid
+      const posts = await userService.getUserPosts(profile.id, followerId, nextPage, POSTS_PER_PAGE)
+      if (posts && posts.length > 0) { setUserPosts(prev => [...prev, ...posts]); setPostsPage(nextPage); setHasMorePosts(posts.length >= POSTS_PER_PAGE) }
+      else setHasMorePosts(false)
+    } catch (err) { console.error('Failed to load more posts:', err) }
+    setLoadingMorePosts(false)
+  }, [profile, postsPage, loadingMorePosts, currentUser])
 
   const handleFollow = useCallback(async () => {
     const followerId = currentUser?.id || currentUser?.uid
@@ -117,263 +251,508 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
     setFollowersCount(prev => nowFollowing ? prev + 1 : prev - 1)
   }, [currentUser, profile, toggleFollow])
 
-  const loadFollowersList = useCallback(async () => {
-    if (!profile) return
-    const list = await followService.getFollowers(profile.id)
-    setFollowersList(list)
-  }, [profile])
+  const loadSavedPosts = useCallback(async () => {
+    const uid = currentUser?.id || currentUser?.uid
+    if (!uid) return
+    setSavedLoading(true)
+    try { const data = await bookmarkService.getUserBookmarks(uid); setSavedPosts(data || []) }
+    catch (err) { console.error('Failed to load saved posts:', err) }
+    setSavedLoading(false)
+  }, [currentUser])
 
-  const loadFollowingList = useCallback(async () => {
-    if (!profile) return
-    const list = await followService.getFollowing(profile.id)
-    setFollowingList(list)
-  }, [profile])
+  useEffect(() => { if (activeTab === 'saved' && isOwnProfile) loadSavedPosts() }, [activeTab, isOwnProfile, loadSavedPosts])
+
+  // Load listings for profile tab
+  useEffect(() => {
+    if (activeTab !== 'listings' || !profile?.id) return
+    let cancelled = false
+    const load = async () => {
+      try {
+        const { supabase } = await import('../lib/supabase')
+        const [compRes, prodRes, ebookRes] = await Promise.all([
+          supabase.from('companies').select('*').eq('registered_by', profile.id),
+          supabase.from('products').select('*').eq('seller_id', profile.id),
+          supabase.from('ebooks').select('*').eq('published_by', profile.id),
+        ])
+        if (!cancelled) {
+          setProfileListings({
+            companies: compRes.data || [],
+            products: prodRes.data || [],
+            ebooks: ebookRes.data || [],
+          })
+        }
+      } catch {}
+    }
+    load()
+    return () => { cancelled = true }
+  }, [activeTab, profile?.id])
 
   const displayName = isOwnProfile
-    ? (globalDisplayName || profile?.display_name || activeUser?.username || 'Pratham')
-    : (profile?.display_name || profileAuthor?.name || 'User')
+    ? (globalDisplayName || profile?.display_name || activeUser?.username || 'User')
+    : (profile?.display_name || normalizedAuthor?.name || 'User')
   const handle = isOwnProfile
-    ? (profile?.username ? `@${profile.username}` : activeUser?.handle || '@pratham')
-    : (profile?.username ? `@${profile.username}` : profileAuthor?.handle || '@user')
-  const bio = isOwnProfile
-    ? (globalBio || profile?.bio || '')
-    : (profile?.bio || '')
+    ? (profile?.username ? `@${profile.username}` : activeUser?.handle || '@user')
+    : (profile?.username ? `@${profile.username}` : normalizedAuthor?.handle || '@user')
+  const bio = isOwnProfile ? (globalBio || profile?.bio || '') : (profile?.bio || '')
   const avatar = isOwnProfile
     ? (globalAvatar || profile?.avatar_url || activeUser?.avatar || '')
-    : (profile?.avatar_url || profileAuthor?.avatar || '')
-
+    : (profile?.avatar_url || normalizedAuthor?.avatar || '')
+  const bannerUrl = isOwnProfile
+    ? (globalBanner || profile?.banner_url || '')
+    : (profile?.banner_url || '')
   const isPrivate = profile?.is_private || false
   const isUnapproved = isPrivate && !isOwnProfile && !isFollowing
-
   const highlights = profile ? (highlightsByUser[profile.id] || []) : []
 
+  const TABS = [
+    { id: 'posts', icon: <Grid size={16} />, label: 'Posts' },
+    ...(isOwnProfile ? [{ id: 'saved', icon: <Bookmark size={16} />, label: 'Saved' }] : []),
+    { id: 'listings', icon: <Building2 size={16} />, label: 'Listings' },
+    { id: 'tagged', icon: <User size={16} />, label: 'Tagged' },
+  ]
+
+  const renderUserRow = (f, onNavigate) => {
+    if (!f) return null
+    return (
+      <div key={f.id || Math.random()} onClick={() => {
+        onNavigate()
+        navigate('profile', { author: { id: f.id, name: f.display_name, handle: f.username ? `@${f.username}` : undefined, avatar: f.avatar_url, verified: f.is_verified } })
+      }}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px', cursor: 'pointer', transition: 'background 0.15s' }}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+        <div style={{
+          width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+          background: f.avatar_url ? `url(${f.avatar_url}) center/cover` : `linear-gradient(135deg, ${C.cyan}, ${C.purple})`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#fff',
+        }}>
+          {!f.avatar_url && (f.display_name?.[0]?.toUpperCase() || '?')}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.display_name || 'User'}</p>
+          <p style={{ margin: 0, fontSize: 11, color: C.muted }}>@{f.username || 'user'}</p>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Loading state ──
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-        style={{ width: 32, height: 32, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: C.cyan, borderRadius: '50%' }} />
+    <div style={{ minHeight: '100vh', background: C.bg, padding: '0 20px' }}>
+      <div style={{ position: 'relative', height: 160, overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, background: '#020617',
+          backgroundImage: 'radial-gradient(circle at 25% 40%, rgba(0,210,255,0.08) 0%, transparent 55%), radial-gradient(circle at 75% 60%, rgba(123,97,255,0.08) 0%, transparent 55%)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.03)', animation: 'pulse 2s infinite' }} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, marginTop: -36, marginBottom: 12 }}>
+        <div style={{ width: 84, height: 84, borderRadius: '50%', background: C.card, border: `3px solid ${C.bg}`, flexShrink: 0 }}>
+          <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: 'rgba(255,255,255,0.03)', animation: 'pulse 2s infinite' }} />
+        </div>
+      </div>
+      {[140, 100].map((w, i) => (
+        <div key={i} style={{ width: w, height: 16, borderRadius: 4, background: C.card, marginBottom: 6, overflow: 'hidden' }}>
+          <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.03)', animation: 'pulse 2s infinite' }} />
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+        {[1, 2, 3].map(i => (
+          <div key={i} style={{ flex: 1, height: 56, borderRadius: 12, background: C.card, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+            <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.03)', animation: 'pulse 2s infinite' }} />
+          </div>
+        ))}
+      </div>
+      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
+    </div>
+  )
+
+  if (error) return (
+    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+      <FileText size={48} style={{ opacity: 0.2, marginBottom: 16 }} />
+      <p style={{ color: C.red, fontSize: 16, fontWeight: 600, margin: '0 0 8px' }}>Something went wrong</p>
+      <p style={{ color: C.muted, fontSize: 13, margin: '0 0 20px' }}>{error}</p>
+      <button onClick={() => navigate('home')} style={{ padding: '10px 24px', borderRadius: 8, background: C.cyan, border: 'none', color: '#000', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Go Home</button>
+    </div>
+  )
+
+  if (!profile) return (
+    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+      <User size={48} style={{ opacity: 0.2, marginBottom: 16 }} />
+      <p style={{ color: C.text, fontSize: 16, fontWeight: 600, margin: '0 0 8px' }}>User not found</p>
+      <p style={{ color: C.muted, fontSize: 13, margin: '0 0 20px' }}>This account doesn't exist or has been removed.</p>
+      <button onClick={() => navigate('home')} style={{ padding: '10px 24px', borderRadius: 8, background: C.cyan, border: 'none', color: '#000', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Go Home</button>
     </div>
   )
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: '90px' }}>
-      {/* Cover */}
-      <div style={{ position: 'relative', height: '140px', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg,#090914,#05050A)', backgroundImage: 'radial-gradient(circle at 20% 50%,rgba(0,210,255,0.12) 0%,transparent 60%),radial-gradient(circle at 80% 30%,rgba(121,40,202,0.12) 0%,transparent 60%)' }} />
-        <button onClick={() => navigate('home')} style={{ position: 'absolute', top: '50px', left: '16px', width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(7,17,36,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,210,255,0.1)', color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }}>
-          <ArrowLeft size={20} />
-        </button>
-        {isOwnProfile && (
-          <button onClick={() => navigate('settings')} style={{ position: 'absolute', top: '50px', right: '16px', width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(7,17,36,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,210,255,0.1)', color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }}>
-            <Settings size={20} />
-          </button>
-        )}
-      </div>
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: '90px', position: 'relative' }}>
+      {/* ── Banner ── */}
+      <ProfileBanner
+        bannerUrl={bannerUrl}
+        isOwn={isOwnProfile}
+        onEdit={() => navigate('settings')}
+      />
 
-      {/* Profile Info */}
-      <div style={{ padding: '0 20px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', marginTop: '-36px', marginBottom: '8px' }}>
+      {/* ── Back / Settings buttons ── */}
+      <button onClick={() => navigate('home')} style={{ position: 'absolute', top: 50, left: 16, width: 36, height: 36, borderRadius: 10, background: 'rgba(7,17,36,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }}>
+        <ArrowLeft size={18} />
+      </button>
+      <button onClick={() => navigate('settings')} style={{ position: 'absolute', top: 50, right: 16, width: 36, height: 36, borderRadius: 10, background: 'rgba(7,17,36,0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }}>
+        <Settings size={18} />
+      </button>
+
+      {/* ── Profile Info ── */}
+      <div style={{ padding: '0 20px 20px', position: 'relative', zIndex: 1 }}>
+        {/* Avatar overlapping banner */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, marginTop: -40, marginBottom: 12 }}>
           <div style={{
-            width: '80px', height: '80px', borderRadius: '50%',
-            background: avatar ? `url(${avatar}) center/cover` : 'linear-gradient(135deg,#00D2FF,#7928CA)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', fontWeight: 900, color: '#fff',
-            border: '3px solid #05050A', flexShrink: 0,
+            width: 84, height: 84, borderRadius: '50%',
+            background: avatar ? `url(${avatar}) center/cover` : `linear-gradient(135deg, ${C.cyan}, ${C.purple})`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, fontWeight: 900, color: '#fff',
+            border: `3px solid ${C.bg}`, flexShrink: 0, boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
           }}>
             {!avatar && displayName[0]?.toUpperCase()}
           </div>
         </div>
 
-        {/* Display Name & Verified */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 2 }}>
-          <h1 style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.3px', color: C.text, margin: 0 }}>{displayName}</h1>
-          {(profile?.is_verified || profileAuthor?.verified) && (
+        {/* Name + verified */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.3px', color: C.text, margin: 0 }}>{displayName}</h1>
+          {(profile?.is_verified || normalizedAuthor?.verified) && (
             <div style={{ width: 20, height: 20, borderRadius: '50%', background: C.cyan, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Check size={12} color="#000" strokeWidth={3} />
             </div>
           )}
         </div>
 
-        {/* Username & Privacy */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: bio ? 8 : 0 }}>
-          <p style={{ color: C.muted, fontSize: '14px', margin: 0 }}>{handle}</p>
+        {/* Handle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: bio ? 10 : 0 }}>
+          <p style={{ color: C.muted, fontSize: 14, margin: 0 }}>{handle}</p>
           {isPrivate && <Lock size={12} color={C.muted} />}
         </div>
 
         {/* Bio */}
-        {bio && <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: '1.65', margin: '0 0 8px' }}>{bio}</p>}
+        {bio && <p style={{ color: '#9ca3af', fontSize: 14, lineHeight: '1.65', margin: '0 0 10px' }}>{bio}</p>}
 
-        {/* Link */}
-        {(profile?.website) && (
-          <a href={profile.website} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: C.cyan, textDecoration: 'none', marginBottom: 8 }}>
+        {/* Website */}
+        {profile?.website && (
+          <a href={profile.website} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: C.cyan, textDecoration: 'none', marginBottom: 10 }}>
             <LinkIcon size={13} /> {profile.website.replace(/^https?:\/\//, '')}
           </a>
         )}
 
-        {/* Joined date */}
-        {profile?.created_at && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: C.muted, marginBottom: 8 }}>
-            <Calendar size={12} /> Joined {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+        {/* Location + Joined */}
+        {(profile?.location || profile?.created_at) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: C.muted, marginBottom: 12, flexWrap: 'wrap' }}>
+            {profile.location && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>{profile.location}</span>}
+            {profile.created_at && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <Calendar size={12} /> Joined {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+              </span>
+            )}
           </div>
         )}
 
-        {/* Stats */}
-        <div style={{ display: 'flex', gap: 20, padding: '12px 0', marginTop: 4 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <span style={{ fontSize: 17, fontWeight: 800, color: C.text }}>{userPosts.length.toLocaleString()}</span>
-            <span style={{ fontSize: 12, color: C.muted }}>posts</span>
-          </div>
-          <div onClick={() => { loadFollowersList(); setShowFollowers(true) }} style={{ display: 'flex', flexDirection: 'column', gap: 1, cursor: 'pointer' }}>
-            <span style={{ fontSize: 17, fontWeight: 800, color: C.text }}>{followersCount.toLocaleString()}</span>
-            <span style={{ fontSize: 12, color: C.muted }}>followers</span>
-          </div>
-          <div onClick={() => { loadFollowingList(); setShowFollowing(true) }} style={{ display: 'flex', flexDirection: 'column', gap: 1, cursor: 'pointer' }}>
-            <span style={{ fontSize: 17, fontWeight: 800, color: C.text }}>{followingCount.toLocaleString()}</span>
-            <span style={{ fontSize: 12, color: C.muted }}>following</span>
-          </div>
+        {/* ── Stats row ── */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+          {[
+            { label: 'posts', count: profile?.posts_count ?? userPosts.length },
+            { label: 'followers', count: followersCount, action: () => setShowFollowers(true) },
+            { label: 'following', count: followingCount, action: () => setShowFollowing(true) },
+          ].map(s => (
+            <motion.button key={s.label} whileTap={{ scale: 0.95 }} onClick={s.action} style={{
+              flex: 1, padding: '12px 0', borderRadius: 12,
+              background: C.card, border: `1px solid ${C.cardBdr}`,
+              cursor: 'pointer', textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 17, fontWeight: 800, color: C.text }}>{s.count.toLocaleString()}</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>{s.label}</div>
+            </motion.button>
+          ))}
         </div>
 
-        {/* Action buttons */}
-        {!isOwnProfile && !isSelf && (
-          <div style={{ display: 'flex', gap: '10px', marginTop: 4 }}>
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={handleFollow}
-              style={{
-                flex: 1, padding: '10px', borderRadius: '8px', cursor: 'pointer',
-                background: isFollowing ? 'rgba(0,210,255,0.15)' : C.cyan,
-                border: isFollowing ? '1px solid rgba(0,210,255,0.3)' : '1px solid transparent',
-                color: isFollowing ? C.cyan : '#000', fontSize: 13, fontWeight: 700, transition: 'all 0.2s',
-              }}
-            >
+        {/* ── Action row ── */}
+        {!isOwnProfile ? (
+          <div style={{ display: 'flex', gap: 10 }}>
+            <motion.button whileTap={{ scale: 0.97 }} onClick={handleFollow} style={{
+              flex: 1, padding: 11, borderRadius: 10, cursor: 'pointer',
+              background: isFollowing ? 'rgba(0,210,255,0.15)' : C.cyan,
+              border: isFollowing ? '1px solid rgba(0,210,255,0.3)' : '1px solid transparent',
+              color: isFollowing ? C.cyan : '#000', fontSize: 13, fontWeight: 700, transition: 'all 0.2s',
+            }}>
               {isFollowing ? 'Following' : 'Follow'}
             </motion.button>
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+            <motion.button whileTap={{ scale: 0.97 }}
               onClick={() => {
-                const peer = {
-                  id: profileAuthor?.handle || profile?.username || displayName,
-                  username: displayName,
-                  avatar: profileAuthor?.avatar || avatar,
-                  online: true, isVerified: profileAuthor?.verified || false,
-                }
-                getOrCreateConversation(peer)
-                setChatMessages([])
-                setShowChat(true)
+                const username = normalizedAuthor?.handle?.replace('@', '') || profile?.username || displayName
+                const id = normalizedAuthor?.id || profile?.id || ''
+                const avatarUrl = normalizedAuthor?.avatar || profile?.avatar_url || ''
+                navigate('chat', { chat: { username, id, avatar: avatarUrl, displayName } })
               }}
-              style={{ flex: 1, padding: 10, borderRadius: 8, border: `1px solid ${C.cardBdr}`, cursor: 'pointer', background: 'rgba(255,255,255,0.04)', color: '#e5e7eb', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-            >
+              style={{
+                flex: 1, padding: 11, borderRadius: 10,
+                border: `1px solid ${C.cardBdr}`, cursor: 'pointer',
+                background: 'rgba(255,255,255,0.04)', color: '#e5e7eb',
+                fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}>
               <MessageSquare size={14} /> Message
             </motion.button>
           </div>
-        )}
-        {isOwnProfile && (
-          <div style={{ display: 'flex', gap: '10px', marginTop: 4 }}>
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
-              onClick={() => navigate('settings')}
-              style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid rgba(0,210,255,0.4)`, cursor: 'pointer', background: 'rgba(0,210,255,0.08)', color: C.cyan, fontSize: 13, fontWeight: 700, transition: 'all 0.2s', textAlign: 'center' }}
-            >
-              Edit Profile
-            </motion.button>
-          </div>
+        ) : (
+          <motion.button whileTap={{ scale: 0.97 }} onClick={() => navigate('settings')}
+            style={{
+              width: '100%', padding: 11, borderRadius: 10,
+              border: `1px solid ${C.accent}`, cursor: 'pointer',
+              background: 'rgba(0,210,255,0.08)', color: C.cyan,
+              fontSize: 13, fontWeight: 700, transition: 'all 0.2s', textAlign: 'center',
+            }}>
+            Edit Profile
+          </motion.button>
         )}
       </div>
 
-      {/* Highlights */}
+      {/* ── Highlights ── */}
       {highlights.length > 0 && (
-        <div style={{ padding: '8px 20px 16px', borderBottom: `1px solid ${C.cardBdr}` }}>
-          <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
-            {highlights.map(hl => (
-              <div key={hl.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer', minWidth: 64 }}>
-                <div style={{
-                  width: 60, height: 60, borderRadius: '50%',
-                  border: '2px solid rgba(255,255,255,0.1)', overflow: 'hidden',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: `url(${hl.cover_url}) center/cover`,
-                }}>
-                  {!hl.cover_url && <Bookmark size={20} color={C.muted} />}
+        <ScopedErrorBoundary fallback={<SectionFallback label="highlights" />}>
+          <div style={{ padding: '8px 20px 16px', borderBottom: `1px solid ${C.cardBdr}`, position: 'relative', zIndex: 1 }}>
+            <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
+              {highlights.map(hl => (
+                <div key={hl.id} onClick={() => alert('Highlight detail coming soon')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer', minWidth: 64 }}>
+                  <div style={{
+                    width: 60, height: 60, borderRadius: '50%',
+                    border: '2px solid rgba(255,255,255,0.1)', overflow: 'hidden',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: hl.cover_url ? `url(${hl.cover_url}) center/cover` : C.card,
+                  }}>
+                    {!hl.cover_url && <Bookmark size={20} color={C.muted} />}
+                  </div>
+                  <span style={{ fontSize: 10, color: C.muted, textAlign: 'center', maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hl.title}</span>
                 </div>
-                <span style={{ fontSize: 10, color: C.muted, textAlign: 'center', maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hl.title}</span>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        </ScopedErrorBoundary>
       )}
 
-      {/* Private profile notice */}
       {isUnapproved && (
-        <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted }}>
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted, position: 'relative', zIndex: 1 }}>
           <Lock size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
           <p style={{ fontSize: 15, fontWeight: 600, color: C.text, margin: '0 0 4px' }}>This account is private</p>
           <p style={{ fontSize: 13, margin: 0 }}>Follow to see their posts</p>
         </div>
       )}
 
-      {/* Tabs */}
       {!isUnapproved && (
-        <>
-          <div style={{ display: 'flex', borderTop: `1px solid ${C.cardBdr}` }}>
-            {[
-              { id: 'posts', icon: <Grid size={18} /> },
-              { id: 'tagged', icon: <User size={18} /> },
-              { id: 'saved', icon: <Bookmark size={18} /> },
-            ].map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: '12px 0', background: 'none', border: 'none',
-                borderTop: activeTab === tab.id ? '1px solid #00D2FF' : '1px solid transparent',
-                color: activeTab === tab.id ? C.cyan : C.muted, cursor: 'pointer',
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          {/* ── Tab bar with labels ── */}
+          <div style={{ display: 'flex', gap: 6, padding: '8px 16px', borderBottom: `1px solid ${C.cardBdr}` }}>
+            {TABS.map(tab => (
+              <motion.button key={tab.id} whileTap={{ scale: 0.95 }} onClick={() => setActiveTab(tab.id)} style={{
+                flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                padding: '10px 0', borderRadius: 10, border: 'none', cursor: 'pointer',
+                background: activeTab === tab.id ? 'rgba(0,210,255,0.12)' : 'transparent',
+                color: activeTab === tab.id ? C.cyan : C.muted,
+                transition: 'all 0.2s',
               }}>
                 {tab.icon}
-              </button>
+                <span style={{ fontSize: 10, fontWeight: 600 }}>{tab.label}</span>
+              </motion.button>
             ))}
           </div>
 
-          {/* Tab content */}
+          {/* ── Filter chips ── */}
+          {activeTab === 'posts' && userPosts.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, padding: '10px 16px', borderBottom: `1px solid ${C.cardBdr}` }}>
+              {[
+                { id: 'all', label: 'All', count: postCounts.all },
+                { id: 'text', label: 'Text', count: postCounts.text },
+                { id: 'photos', label: 'Photos', count: postCounts.photos },
+              ].map(f => (
+                <button key={f.id} onClick={() => setPostFilter(f.id)} style={{
+                  padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  border: `1px solid ${postFilter === f.id ? C.accent : 'rgba(255,255,255,0.08)'}`,
+                  background: postFilter === f.id ? 'rgba(0,210,255,0.12)' : 'rgba(255,255,255,0.03)',
+                  color: postFilter === f.id ? C.cyan : C.muted,
+                  transition: 'all 0.2s',
+                }}>
+                  {f.label} <span style={{ opacity: 0.5, marginLeft: 2, fontSize: 11 }}>{f.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <AnimatePresence mode="wait">
+            {/* ── Posts tab ── */}
             {activeTab === 'posts' && (
-              <motion.div key="posts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                {userPosts.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted }}>
-                    <FileText size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
-                    <p style={{ fontSize: 14, margin: 0 }}>No posts yet</p>
-                  </div>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
-                    {userPosts.map((post) => (
-                      <motion.div key={post.id} whileHover={{ opacity: 0.85 }} onClick={() => navigate('post', { postId: post.id })}
-                        style={{ aspectRatio: '1', background: post.image_url ? `url(${post.image_url}) center/cover` : 'linear-gradient(135deg, rgba(0,210,255,0.08), rgba(121,40,202,0.08))', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
-                        {!post.image_url && (
-                          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 6 }}>
-                            <span style={{ fontSize: 9, color: C.muted, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>{post.title}</span>
-                          </div>
-                        )}
-                        <div style={{ position: 'absolute', bottom: 4, right: 5, display: 'flex', gap: 5 }}>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 1, color: '#fff', fontSize: 9, textShadow: '0 1px 3px rgba(0,0,0,0.7)' }}><Heart size={9} fill="#fff" /> {post.likes_count || 0}</span>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 1, color: '#fff', fontSize: 9, textShadow: '0 1px 3px rgba(0,0,0,0.7)' }}><MessageCircle size={9} fill="#fff" /> {post.comments_count || 0}</span>
+              <ScopedErrorBoundary key="posts-boundary" fallback={<SectionFallback label="posts" />}>
+                <motion.div key="posts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  {userPosts.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted }}>
+                      <FileText size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
+                      <p style={{ fontSize: 14, margin: 0 }}>No posts yet</p>
+                    </div>
+                  ) : filteredPosts.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted }}>
+                      <FileText size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
+                      <p style={{ fontSize: 14, margin: 0 }}>No {postFilter === 'text' ? 'text' : 'photo'} posts yet</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        {filteredPosts.map((post, i) => (
+                          <PostCard key={post.id} post={post} navigate={navigate} delay={i * 0.03} />
+                        ))}
+                      </div>
+                      {hasMorePosts && (
+                        <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'center' }}>
+                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={loadMorePosts} disabled={loadingMorePosts}
+                            style={{ padding: '10px 28px', borderRadius: 8, border: `1px solid ${C.cardBdr}`, background: 'rgba(255,255,255,0.04)', color: C.text, fontSize: 13, fontWeight: 600, cursor: loadingMorePosts ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {loadingMorePosts && <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.1)', borderTopColor: C.cyan, borderRadius: '50%' }} />}
+                            {loadingMorePosts ? 'Loading...' : 'Load More'}
+                          </motion.button>
                         </div>
-                      </motion.div>
+                      )}
+                    </>
+                  )}
+                </motion.div>
+              </ScopedErrorBoundary>
+            )}
+
+            {/* ── Saved tab ── */}
+            {activeTab === 'saved' && isOwnProfile && (
+              <ScopedErrorBoundary key="saved-boundary" fallback={<SectionFallback label="saved posts" />}>
+                <motion.div key="saved" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  {savedLoading ? (
+                    <Spinner />
+                  ) : savedPosts.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted }}>
+                      <Bookmark size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
+                      <p style={{ fontSize: 15, fontWeight: 600, color: C.text, margin: '0 0 4px' }}>No saved posts yet</p>
+                      <p style={{ fontSize: 13, margin: 0 }}>Save posts to read later</p>
+                    </div>
+                  ) : (
+                    <div>
+                      {savedPosts.map((bookmark, i) => {
+                        const post = bookmark.post
+                        if (!post) return null
+                        if (!post.author && post.author_username) {
+                          post.author = { id: post.author_id, display_name: post.author_display_name, username: post.author_username, avatar_url: post.author_avatar, banner_url: '', bio: '', website: '', location: '', is_verified: false, followers_count: 0, following_count: 0, posts_count: 0, created_at: post.created_at, updated_at: post.updated_at }
+                        }
+                        return <PostCard key={bookmark.id} post={post} navigate={navigate} delay={i * 0.03} />
+                      })}
+                    </div>
+                  )}
+                </motion.div>
+              </ScopedErrorBoundary>
+            )}
+
+            {/* ── Tagged tab ── */}
+            {activeTab === 'tagged' && (
+              <ScopedErrorBoundary key="tagged-boundary" fallback={<SectionFallback label="tagged posts" />}>
+                <motion.div key="tagged" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted }}>
+                    <Tag size={40} style={{ opacity: 0.2, marginBottom: 10 }} />
+                    <p style={{ fontSize: 15, fontWeight: 600, color: C.text, margin: '0 0 4px' }}>Tagged posts</p>
+                    <p style={{ fontSize: 13, margin: 0 }}>Posts you're tagged in will appear here</p>
+                  </div>
+                </motion.div>
+              </ScopedErrorBoundary>
+            )}
+
+            {/* ── Listings tab ── */}
+            {activeTab === 'listings' && (
+              <ScopedErrorBoundary key="listings-boundary" fallback={<SectionFallback label="listings" />}>
+                <motion.div key="listings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <div style={{ display: 'flex', gap: 8, padding: '10px 16px', borderBottom: `1px solid ${C.cardBdr}` }}>
+                    {[
+                      { id: 'all', label: 'All', count: profileListings.companies.length + profileListings.products.length + profileListings.ebooks.length },
+                      { id: 'suppliers', label: 'Suppliers', count: profileListings.companies.length },
+                      { id: 'products', label: 'Products', count: profileListings.products.length },
+                      { id: 'magazines', label: 'Magazines', count: profileListings.ebooks.length },
+                    ].map(f => (
+                      <button key={f.id} onClick={() => setListingsCategoryTab(f.id)} style={{
+                        padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        border: `1px solid ${listingsCategoryTab === f.id ? C.accent : 'rgba(255,255,255,0.08)'}`,
+                        background: listingsCategoryTab === f.id ? 'rgba(0,210,255,0.12)' : 'rgba(255,255,255,0.03)',
+                        color: listingsCategoryTab === f.id ? C.cyan : C.muted,
+                        transition: 'all 0.2s',
+                      }}>
+                        {f.label} <span style={{ opacity: 0.5, marginLeft: 2, fontSize: 11 }}>{f.count}</span>
+                      </button>
                     ))}
                   </div>
-                )}
-              </motion.div>
-            )}
-            {activeTab === 'tagged' && (
-              <motion.div key="tagged" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted }}>
-                  <Tag size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
-                  <p style={{ fontSize: 14, margin: 0 }}>No tagged posts yet</p>
-                </div>
-              </motion.div>
-            )}
-            {activeTab === 'saved' && (
-              <motion.div key="saved" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted }}>
-                  <Bookmark size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
-                  <p style={{ fontSize: 14, margin: 0 }}>No saved posts yet</p>
-                </div>
-              </motion.div>
+                  {(() => {
+                    const allItems = [
+                      ...profileListings.companies.map(c => ({ ...c, _type: 'company' })),
+                      ...profileListings.products.map(p => ({ ...p, _type: 'product' })),
+                      ...profileListings.ebooks.map(e => ({ ...e, _type: 'ebook' })),
+                    ]
+                    const filtered = listingsCategoryTab === 'all' ? allItems : allItems.filter(i => {
+                      if (listingsCategoryTab === 'suppliers') return i._type === 'company'
+                      if (listingsCategoryTab === 'products') return i._type === 'product'
+                      if (listingsCategoryTab === 'magazines') return i._type === 'ebook'
+                      return true
+                    })
+                    if (filtered.length === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted }}>
+                          <Building2 size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
+                          <p style={{ fontSize: 15, fontWeight: 600, color: C.text, margin: '0 0 4px' }}>
+                            {listingsCategoryTab === 'all' ? 'No listings yet' : `No ${listingsCategoryTab} listed`}
+                          </p>
+                          <p style={{ fontSize: 13, margin: 0 }}>Published listings will appear here</p>
+                        </div>
+                      )
+                    }
+                    return (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, padding: '12px 16px' }}>
+                        {filtered.map(item => (
+                          <motion.div key={item.id} whileHover={{ y: -2 }}
+                            onClick={() => {
+                              if (item._type === 'company') navigate('supplierDetail', { company: item })
+                              else if (item._type === 'product') navigate('productDetail', { product: item })
+                              else navigate('magazineDetail', { ebook: item })
+                            }}
+                            style={{
+                              background: C.card, border: `1px solid ${C.cardBdr}`,
+                              borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
+                            }}>
+                            {(item.cover_url || (item.images && item.images[0])) && (
+                              <div style={{ height: 100, background: `url(${item.cover_url || item.images[0]}) center/cover` }} />
+                            )}
+                            <div style={{ padding: 12 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                                <span style={{
+                                  fontSize: 10, fontWeight: 700,
+                                  color: item._type === 'company' ? '#2563eb' : item._type === 'product' ? '#059669' : '#f59e0b',
+                                  background: item._type === 'company' ? 'rgba(37,99,235,0.12)' : item._type === 'product' ? 'rgba(5,150,105,0.12)' : 'rgba(245,158,11,0.12)',
+                                  padding: '2px 8px', borderRadius: 6, textTransform: 'capitalize',
+                                }}>{item._type}</span>
+                                {item.price && (
+                                  <span style={{ fontSize: 11, fontWeight: 700, color: C.green }}>${item.price.toLocaleString()}</span>
+                                )}
+                              </div>
+                              <h4 style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {item.name || item.title || 'Untitled'}
+                              </h4>
+                              {item.description && (
+                                <p style={{ margin: 0, fontSize: 12, color: C.muted, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                  {item.description}
+                                </p>
+                              )}
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </motion.div>
+              </ScopedErrorBoundary>
             )}
           </AnimatePresence>
-        </>
+        </div>
       )}
 
-      {/* Followers Modal */}
+      {/* ── Followers Modal ── */}
       <AnimatePresence>
         {showFollowers && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -384,28 +763,18 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
               style={{ width: '100%', maxWidth: 500, maxHeight: '70vh', background: '#090914', borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.cardBdr}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Followers</span>
-                <button onClick={() => setShowFollowers(false)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4 }}>
-                  <X size={18} />
-                </button>
+                <button onClick={() => setShowFollowers(false)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4 }}><X size={18} /></button>
               </div>
               <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-                {followersList.length === 0 ? (
+                {followersLoading ? (
+                  <Spinner />
+                ) : followersList.filter(Boolean).length === 0 ? (
                   <div style={{ textAlign: 'center', padding: 30, color: C.muted, fontSize: 13 }}>No followers yet</div>
                 ) : (
-                  followersList.map(f => (
-                    <div key={f.id} onClick={() => { setShowFollowers(false); navigate('profile', { author: f }) }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px', cursor: 'pointer', transition: 'background 0.15s' }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: f.avatar_url ? `url(${f.avatar_url}) center/cover` : `linear-gradient(135deg, ${C.cyan}, ${C.purple})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                        {!f.avatar_url && f.display_name?.[0]?.toUpperCase()}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.display_name}</p>
-                        <p style={{ margin: 0, fontSize: 11, color: C.muted }}>@{f.username}</p>
-                      </div>
-                    </div>
-                  ))
+                  <>
+                    {followersList.filter(Boolean).length >= 50 && <div style={{ textAlign: 'center', padding: '8px 0', color: C.muted, fontSize: 11 }}>Showing first 50</div>}
+                    {followersList.filter(Boolean).map(f => renderUserRow(f, () => setShowFollowers(false)))}
+                  </>
                 )}
               </div>
             </motion.div>
@@ -413,7 +782,7 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
         )}
       </AnimatePresence>
 
-      {/* Following Modal */}
+      {/* ── Following Modal ── */}
       <AnimatePresence>
         {showFollowing && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -424,111 +793,21 @@ export default function ProfilePage({ user: propUser, navigate, profileAuthor })
               style={{ width: '100%', maxWidth: 500, maxHeight: '70vh', background: '#090914', borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.cardBdr}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Following</span>
-                <button onClick={() => setShowFollowing(false)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4 }}>
-                  <X size={18} />
-                </button>
+                <button onClick={() => setShowFollowing(false)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4 }}><X size={18} /></button>
               </div>
               <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-                {followingList.length === 0 ? (
+                {followingLoading ? (
+                  <Spinner />
+                ) : followingList.filter(Boolean).length === 0 ? (
                   <div style={{ textAlign: 'center', padding: 30, color: C.muted, fontSize: 13 }}>Not following anyone yet</div>
                 ) : (
-                  followingList.map(f => (
-                    <div key={f.id} onClick={() => { setShowFollowing(false); navigate('profile', { author: f }) }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px', cursor: 'pointer', transition: 'background 0.15s' }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: f.avatar_url ? `url(${f.avatar_url}) center/cover` : `linear-gradient(135deg, ${C.cyan}, ${C.purple})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                        {!f.avatar_url && f.display_name?.[0]?.toUpperCase()}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.display_name}</p>
-                        <p style={{ margin: 0, fontSize: 11, color: C.muted }}>@{f.username}</p>
-                      </div>
-                    </div>
-                  ))
+                  <>
+                    {followingList.filter(Boolean).length >= 50 && <div style={{ textAlign: 'center', padding: '8px 0', color: C.muted, fontSize: 11 }}>Showing first 50</div>}
+                    {followingList.filter(Boolean).map(f => renderUserRow(f, () => setShowFollowing(false)))}
+                  </>
                 )}
               </div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Chat Popup */}
-      <AnimatePresence>
-        {showChat && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            style={{
-              position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
-              width: 360, maxHeight: 500, background: '#090914', border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 16, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.7)',
-              display: 'flex', flexDirection: 'column', overflow: 'hidden',
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: `linear-gradient(135deg, ${C.cyan}, ${C.purple})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff' }}>
-                  {displayName[0]?.toUpperCase()}
-                </div>
-                <div>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#fff' }}>{displayName}</p>
-                  <p style={{ margin: 0, fontSize: 10, color: C.green, display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: C.green }} /> Online</p>
-                </div>
-              </div>
-              <button onClick={() => setShowChat(false)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#6b7280' }}>
-                <X size={14} />
-              </button>
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, minHeight: 120, maxHeight: 320 }}>
-              {chatMessages.length === 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 16px', color: '#6b7280', textAlign: 'center' }}>
-                  <MessageSquare size={28} style={{ opacity: 0.3, marginBottom: 8 }} />
-                  <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>Start a conversation with {displayName}...</p>
-                </div>
-              ) : (
-                chatMessages.map(msg => (
-                  <div key={msg.id} style={{ display: 'flex', justifyContent: msg.role === 'me' ? 'flex-end' : 'flex-start' }}>
-                    <div style={{ maxWidth: '80%', padding: '10px 14px', borderRadius: 14, fontSize: 13, lineHeight: 1.5, background: msg.role === 'me' ? 'linear-gradient(135deg, #2563eb, #7c3aed)' : 'rgba(255,255,255,0.05)', border: msg.role === 'me' ? 'none' : '1px solid rgba(255,255,255,0.06)', color: '#fff' }}>
-                      {msg.text}
-                      <p style={{ margin: '4px 0 0', fontSize: 9, color: msg.role === 'me' ? 'rgba(255,255,255,0.5)' : '#6b7280' }}>{msg.time || 'now'}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-              <div ref={chatEndRef} />
-            </div>
-            <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8 }}>
-              <input value={chatMsg} onChange={e => setChatMsg(e.target.value)} placeholder="Type a message..."
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && chatMsg.trim()) {
-                    const peer = { id: profileAuthor?.handle || displayName, username: displayName, avatar: '', online: true, isVerified: false }
-                    const conv = getOrCreateConversation(peer)
-                    const newMsg = { id: `msg_${Date.now()}`, role: 'me', text: chatMsg, time: 'now' }
-                    setChatMessages(p => [...p, newMsg])
-                    addMessage(conv.id, { id: newMsg.id, senderId: 'me', text: chatMsg, timestamp: new Date(), status: 'delivered' })
-                    setChatMsg('')
-                  }
-                }}
-                style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#fff', outline: 'none' }}
-              />
-              <motion.button whileTap={{ scale: 0.95 }}
-                onClick={() => {
-                  if (chatMsg.trim()) {
-                    const peer = { id: profileAuthor?.handle || displayName, username: displayName, avatar: '', online: true, isVerified: false }
-                    const conv = getOrCreateConversation(peer)
-                    const newMsg = { id: `msg_${Date.now()}`, role: 'me', text: chatMsg, time: 'now' }
-                    setChatMessages(p => [...p, newMsg])
-                    addMessage(conv.id, { id: newMsg.id, senderId: 'me', text: chatMsg, timestamp: new Date(), status: 'delivered' })
-                    setChatMsg('')
-                  }
-                }}
-                style={{ width: 40, height: 40, borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #2563eb, #7c3aed)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
-              >
-                <Send size={16} />
-              </motion.button>
-            </div>
           </motion.div>
         )}
       </AnimatePresence>

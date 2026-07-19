@@ -14,7 +14,11 @@ export const likeService = {
       await supabase.rpc('decrement_count', { table_name: 'posts', column_name: 'likes_count', row_id: postId })
       return false
     } else {
-      await supabase.from('likes').insert({ user_id: userId, post_id: postId })
+      const { error } = await supabase.from('likes').insert({ user_id: userId, post_id: postId })
+      if (error) {
+        if (error.code === '23505') return false
+        return false
+      }
       await supabase.rpc('increment_count', { table_name: 'posts', column_name: 'likes_count', row_id: postId })
       return true
     }
@@ -33,7 +37,11 @@ export const likeService = {
       await supabase.rpc('decrement_count', { table_name: 'comments', column_name: 'likes_count', row_id: commentId })
       return false
     } else {
-      await supabase.from('likes').insert({ user_id: userId, comment_id: commentId })
+      const { error } = await supabase.from('likes').insert({ user_id: userId, comment_id: commentId })
+      if (error) {
+        if (error.code === '23505') return false
+        return false
+      }
       await supabase.rpc('increment_count', { table_name: 'comments', column_name: 'likes_count', row_id: commentId })
       return true
     }

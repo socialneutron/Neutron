@@ -4,6 +4,7 @@ import { X, Send, Heart, Trash2, MessageCircle } from 'lucide-react'
 import { useSupabaseAuth } from '../../context/SupabaseAuthContext'
 import { commentService, likeService, notificationService } from '../../services'
 import type { CommentWithAuthor, Comment } from '../../types/database'
+import { timeAgo } from '@/lib/timeAgo'
 
 const C = {
   bg: '#05050A', card: '#090914', cardBdr: 'rgba(255,255,255,0.06)',
@@ -150,7 +151,7 @@ export default function CommentsModal({ postId, authorId, onClose, navigate, onC
           : c
       ))
       if (authorId !== user.id) {
-        await notificationService.create(authorId, user.id, 'comment', postId, reply.id)
+        await notificationService.create(authorId, user.id, 'reply', postId, reply.id)
       }
     }
     setSendingReply(false)
@@ -184,15 +185,6 @@ export default function CommentsModal({ postId, authorId, onClose, navigate, onC
       setComments(prev => prev.map(c => c.id === commentId ? { ...c, is_liked: nowLiked, likes_count: nowLiked ? c.likes_count + 1 : c.likes_count - 1 } : c))
     }
   }, [user, postId])
-
-  const timeAgo = (date: string) => {
-    const diff = Date.now() - new Date(date).getTime()
-    const mins = Math.floor(diff / 60000)
-    if (mins < 60) return `${mins}m`
-    const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `${hrs}h`
-    return `${Math.floor(hrs / 24)}d`
-  }
 
   const isNew = (id: string) => newCommentIds.has(id)
 
@@ -331,7 +323,7 @@ function CommentNodeComponent({
       <div style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: `1px solid rgba(255,255,255,0.03)` }}>
         {/* Avatar */}
         <div
-          onClick={() => { onClose(); navigate('profile', { author: { name: comment.author?.display_name, handle: `@${comment.author?.username}`, avatar: comment.author?.avatar_url } }) }}
+          onClick={() => { onClose(); navigate('profile', { author: { id: comment.author_id, name: comment.author?.display_name, handle: `@${comment.author?.username}`, avatar: comment.author?.avatar_url, verified: comment.author?.is_verified } }) }}
           style={{
             width: depth > 0 ? 28 : 34, height: depth > 0 ? 28 : 34, borderRadius: '50%',
             background: comment.author?.avatar_url ? `url(${comment.author.avatar_url}) center/cover` : `linear-gradient(135deg, ${C.cyan}60, ${C.purple}60)`,
@@ -348,7 +340,7 @@ function CommentNodeComponent({
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
             <span
               style={{ fontSize: depth > 0 ? 12 : 13, fontWeight: 700, color: C.text, cursor: 'pointer' }}
-              onClick={() => { onClose(); navigate('profile', { author: { name: comment.author?.display_name, handle: `@${comment.author?.username}` } }) }}
+              onClick={() => { onClose(); navigate('profile', { author: { id: comment.author_id, name: comment.author?.display_name, handle: `@${comment.author?.username}`, verified: comment.author?.is_verified } }) }}
             >
               {comment.author?.display_name}
             </span>
@@ -364,7 +356,7 @@ function CommentNodeComponent({
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
             <motion.button
               whileTap={{ scale: 0.7 }}
-              onClick={() => handleLikeComment(comment.id, depth > 0 ? comment.id : undefined)}
+              onClick={() => handleLikeComment(comment.id)}
               style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: comment.is_liked ? '#f87171' : C.muted, fontSize: 11, cursor: 'pointer', padding: '2px 6px', borderRadius: 6, transition: 'color 0.2s, background 0.2s' }}
               onMouseEnter={e => { if (!comment.is_liked) e.currentTarget.style.background = 'rgba(248,113,113,0.06)' }}
               onMouseLeave={e => e.currentTarget.style.background = 'none'}
@@ -412,7 +404,7 @@ function CommentNodeComponent({
             ) : null}
 
             {user?.id === comment.author_id && (
-              <button onClick={() => handleDelete(comment.id, depth > 0 ? comment.id : undefined)}
+              <button onClick={() => handleDelete(comment.id)}
                 style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: C.muted, fontSize: 11, cursor: 'pointer', padding: '2px 6px', borderRadius: 6, transition: 'color 0.2s' }}
                 onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
                 onMouseLeave={e => e.currentTarget.style.color = C.muted}

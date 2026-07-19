@@ -252,3 +252,55 @@ export async function updateProfile(userId: string, data: { username?: string; b
 
   return { user }
 }
+
+export async function oauthLogin(data: {
+  provider: string
+  providerUserId: string
+  email: string
+  displayName: string
+  avatar: string
+}, userAgent?: string, ipAddress?: string) {
+  let user = await queryOne('SELECT * FROM users WHERE email = $1', [data.email])
+
+  if (user) {
+    await query(
+      'UPDATE users SET auth_provider = $1, auth_provider_id = $2, profile_picture = COALESCE($3, profile_picture), email_verified = TRUE WHERE id = $4',
+      [data.provider, data.providerUserId, data.avatar || null, user.id]
+    )
+  } else {
+    const username = data.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase() || `user_${Date.now().toString(36)}`
+    const existingUsername = await queryOne('SELECT id FROM users WHERE username = $1', [username])
+    const finalUsername = existingUsername ? `${username}_${Date.now().toString(36)}` : username
+
+    user = await queryOne(
+      `INSERT INTO users (id, username, email, password_hash, auth_provider, auth_provider_id, profile_picture, email_verified)
+       VALUES ($1, $2, $3, '', $4, $5, $6, TRUE)
+       RETURNING id, username, email, email_verified, account_status, created_at`,
+      [uuid(), finalUsername, data.email, data.provider, data.providerUserId, data.avatar || '']
+    )
+  }
+
+  const accessToken = generateAccessToken(user!)
+  const refreshToken = generateRefreshToken(user!, true)
+  const expiresAt = getRefreshTokenExpiry(true)
+
+  await query(
+    'INSERT INTO sessions (id, user_id, refresh_token, user_agent, ip_address, expires_at) VALUES ($1, $2, $3, $4, $5, $6)',
+    [uuid(), user!.id, refreshToken, userAgent || '', ipAddress || '', expiresAt]
+  )
+
+  return {
+    user: {
+      id: user!.id,
+      username: user!.username,
+      email: user!.email,
+      profilePicture: user!.profile_picture,
+      bio: user!.bio,
+      emailVerified: user!.email_verified,
+      accountStatus: user!.account_status,
+      createdAt: user!.created_at,
+    },
+    accessToken,
+    refreshToken,
+  }
+}

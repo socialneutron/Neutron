@@ -1,5 +1,4 @@
 import { UserProfile, Conversation, ActiveSession } from './types';
-import { encryptMessage } from './utils/cryptoSim';
 
 // Key pairs
 export const MY_PROFILE: UserProfile = {
@@ -24,7 +23,6 @@ export const MOCK_USERS: UserProfile[] = [
   }
 ];
 
-// Helper to construct structured encrypted/decrypted historical messages
 function createSecMsg(
   id: string,
   senderId: string,
@@ -39,13 +37,11 @@ function createSecMsg(
   disappearingTimer?: number
 ): any {
   const timestamp = new Date(Date.now() - timeOffsetMin * 60000);
-  const encryptedPayload = encryptMessage(text, key);
   return {
     id,
     senderId,
     recipientId,
     text,
-    encryptedPayload,
     timestamp,
     type,
     attachment,

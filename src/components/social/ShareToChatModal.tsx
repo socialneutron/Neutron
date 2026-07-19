@@ -42,8 +42,9 @@ export default function ShareToChatModal({ post, onClose, navigate }: ShareToCha
       status: 'sending' as const,
     }
     addMessage(convId, msg)
+    const conv = conversations.find(c => c.id === convId)
     setTimeout(() => {
-      navigate('chat', { chat: { username: participantUsername } })
+      navigate('chat', { chat: { username: participantUsername, id: conv?.participant.id, avatar: conv?.participant.avatar, displayName: conv?.participant.displayName || participantUsername } })
     }, 200)
   }
 
@@ -52,7 +53,7 @@ export default function ShareToChatModal({ post, onClose, navigate }: ShareToCha
     const participant = {
       id: search.trim().toLowerCase().replace(/\s+/g, '_'),
       username: search.trim(),
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(search.trim())}&background=2563eb&color=fff&size=150`,
       online: false,
       isVerified: false,
     }
@@ -66,7 +67,7 @@ export default function ShareToChatModal({ post, onClose, navigate }: ShareToCha
       status: 'sending' as const,
     }
     addMessage(conv.id, msg)
-    navigate('chat', { chat: { username: participant.username } })
+    navigate('chat', { chat: { username: participant.username, id: participant.id, avatar: participant.avatar, displayName: participant.username } })
   }
 
   return (

@@ -20,7 +20,6 @@ const connectRedis = () => {
     redis = new Redis(url, {
       maxRetriesPerRequest: 3,
       connectTimeout: 5000,
-      lazyConnect: true,
       // Exponential backoff for reconnects
       retryStrategy: (times) => {
         if (times > 5) return null; // Give up after 5 retries
